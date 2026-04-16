@@ -52,12 +52,14 @@ class WorkmanagerScheduler {
       frequency: frequency,
       existingWorkPolicy: ExistingWorkPolicy.replace,
       constraints: Constraints(
+        // Policy invariants live in SchedulerPolicy so they are test-
+        // guarded — this config is the single biggest battery lever.
         // ignore: constant_identifier_names — workmanager enum uses snake_case
         networkType: NetworkType.not_required,
-        requiresBatteryNotLow: false,
-        requiresCharging: false,
-        requiresDeviceIdle: false,
-        requiresStorageNotLow: false,
+        requiresBatteryNotLow: SchedulerPolicy.requiresBatteryNotLow,
+        requiresCharging: SchedulerPolicy.requiresCharging,
+        requiresDeviceIdle: SchedulerPolicy.requiresDeviceIdle,
+        requiresStorageNotLow: SchedulerPolicy.requiresStorageNotLow,
       ),
       tag: tagScheduled,
     );

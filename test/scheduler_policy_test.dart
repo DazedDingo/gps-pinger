@@ -129,4 +129,37 @@ void main() {
       expect(SchedulerPolicy.skipNote, 'skipped_low_battery');
     });
   });
+
+  group('SchedulerPolicy — WorkManager constraint invariants', () {
+    // These are regression guards, not logic tests. If any of these flip to
+    // true, Android WorkManager will silently defer our worker — exactly
+    // when the user most needs the log (long hikes, draining batteries,
+    // low storage during multi-day trips). SchedulerPolicy.skip/retry/
+    // nextCadence is the ONLY allowed battery-throttling mechanism.
+    test('requiresBatteryNotLow stays false — worker must run on low battery',
+        () {
+      expect(SchedulerPolicy.requiresBatteryNotLow, isFalse);
+    });
+
+    test('requiresCharging stays false — app runs untethered by design', () {
+      expect(SchedulerPolicy.requiresCharging, isFalse);
+    });
+
+    test(
+        'requiresDeviceIdle stays false — user could be actively using the '
+        'phone and still want a ping logged', () {
+      expect(SchedulerPolicy.requiresDeviceIdle, isFalse);
+    });
+
+    test(
+        'requiresStorageNotLow stays false — encrypted DB grows slowly, '
+        'blocking on storage pressure is the wrong call', () {
+      expect(SchedulerPolicy.requiresStorageNotLow, isFalse);
+    });
+
+    test('requiresNetwork stays false — scheduled pings are offline-first',
+        () {
+      expect(SchedulerPolicy.requiresNetwork, isFalse);
+    });
+  });
 }

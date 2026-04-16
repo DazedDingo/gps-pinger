@@ -27,6 +27,21 @@ class SchedulerPolicy {
   /// battery. Also used by [shouldRetry] to suppress retrying the skip.
   static const skipNote = 'skipped_low_battery';
 
+  // --- WorkManager constraint invariants --------------------------------
+  //
+  // All four flags below MUST stay false. WorkManager otherwise silently
+  // defers the job exactly when the user most wants the log — e.g.
+  // `requiresBatteryNotLow: true` would stop the worker on a long hike with
+  // a draining battery, which is the whole situation the app exists for.
+  // Our own SchedulerPolicy is the only thing allowed to throttle.
+
+  static const requiresBatteryNotLow = false;
+  static const requiresCharging = false;
+  static const requiresDeviceIdle = false;
+  static const requiresStorageNotLow = false;
+  // Scheduled pings log offline first; we never need a network to run.
+  static const requiresNetwork = false;
+
   /// True if we should skip the fix and just log a marker row. `null` and
   /// zero readings are treated as "unknown" and do NOT trigger a skip.
   static bool shouldSkipForLowBattery(int? batteryPct) {

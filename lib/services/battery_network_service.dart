@@ -21,19 +21,25 @@ class BatteryNetworkService {
     String net = 'unknown';
     try {
       final results = await Connectivity().checkConnectivity();
-      // connectivity_plus v6 returns a List — take the strongest available.
-      if (results.contains(ConnectivityResult.wifi)) {
-        net = 'wifi';
-      } else if (results.contains(ConnectivityResult.mobile)) {
-        net = 'mobile';
-      } else if (results.contains(ConnectivityResult.ethernet)) {
-        net = 'ethernet';
-      } else if (results.contains(ConnectivityResult.none)) {
-        net = 'none';
-      }
+      net = pickNetworkLabel(results);
     } catch (_) {
       net = 'unknown';
     }
     return BatteryNetworkSnapshot(pct, net);
+  }
+
+  /// Picks the best label for a set of concurrent connectivity results.
+  /// connectivity_plus v6 returns a list because a device can have e.g.
+  /// wifi + mobile simultaneously; we pick the strongest/cheapest for the
+  /// user. Priority: wifi > mobile > ethernet > none.
+  ///
+  /// Pure function, exposed for testing — this is the only network-state
+  /// decision the app makes on every wake.
+  static String pickNetworkLabel(List<ConnectivityResult> results) {
+    if (results.contains(ConnectivityResult.wifi)) return 'wifi';
+    if (results.contains(ConnectivityResult.mobile)) return 'mobile';
+    if (results.contains(ConnectivityResult.ethernet)) return 'ethernet';
+    if (results.contains(ConnectivityResult.none)) return 'none';
+    return 'unknown';
   }
 }

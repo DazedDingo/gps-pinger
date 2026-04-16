@@ -46,6 +46,10 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # Drop-in sqflite backend for unit tests so DAO queries can be exercised
+  # against a real (in-memory) SQLite without SQLCipher's platform channel.
+  # Production still uses sqflite_sqlcipher for the encrypted on-device DB.
+  sqflite_common_ffi: ^2.3.3
 
 flutter:
   uses-material-design: true
