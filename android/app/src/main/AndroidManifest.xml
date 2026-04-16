@@ -1,0 +1,91 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Location: scheduled 4h pings need ACCESS_BACKGROUND_LOCATION. Coarse
+         is included as a fallback for devices/users who deny fine. Fine is
+         required for Wi-Fi SSID reads on Android 10+. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+
+    <!-- Boot receiver wakes up after reboot to re-enqueue WorkManager and
+         log a `boot` marker row. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
+    <!-- Exact alarms: declared now so Phase 5 can toggle between
+         WorkManager-only and AlarmManager-exact paths without a manifest
+         change. The Phase 1 scheduler is WorkManager-only. USE_EXACT_ALARM
+         is granted automatically on API 33+; SCHEDULE_EXACT_ALARM must be
+         requested at runtime on API 31+. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+
+    <!-- Panic foreground service (Phase 2). Declared up front so manifest
+         validation happens early. Phase 1 never starts an FG service. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+
+    <!-- Android 13+ runtime notifications permission (panic receipt,
+         missed-heartbeat warnings). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <!-- Wi-Fi SSID on Android 13+ requires NEARBY_WIFI_DEVICES in addition
+         to fine location. We never trigger active scans (battery rule) —
+         only `getConnectionInfo` reads. -->
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="33"/>
+
+    <!-- Cell tower ID read via TelephonyManager.getAllCellInfo() requires
+         READ_PHONE_STATE (and fine location). -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+
+    <!-- Opt out of OEM aggressive doze so the 4h worker runs on time. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+
+    <application
+        android:label="Trail"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme"/>
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+
+        <!-- Boot marker: enqueues a one-off WorkManager task that logs a
+             `boot` row and triggers an immediate GPS fix. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:directBootAware="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
+            </intent-filter>
+        </receiver>
+
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2"/>
+    </application>
+</manifest>

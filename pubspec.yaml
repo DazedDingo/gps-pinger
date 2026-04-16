@@ -1,0 +1,51 @@
+name: trail
+description: "Trail — personal-safety GPS logger. Offline, encrypted, 4h-cadence background pings."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State / routing — match watchnext + groceries-app conventions
+  flutter_riverpod: ^2.5.1
+  go_router: ^14.2.7
+
+  # Location + scheduling
+  geolocator: ^13.0.1
+  workmanager: ^0.5.2
+
+  # Storage (encrypted)
+  sqflite_sqlcipher: ^3.1.0+1
+  flutter_secure_storage: ^9.2.2
+  path: ^1.9.0
+  path_provider: ^2.1.4
+
+  # Device sensors / status
+  battery_plus: ^6.0.3
+  connectivity_plus: ^6.0.5
+
+  # Auth / permissions
+  local_auth: ^2.3.0
+  permission_handler: ^11.3.1
+
+  # UX helpers
+  share_plus: ^10.0.2
+  # flutter_local_notifications lands in Phase 2 with the panic-receipt
+  # notification. Not imported yet — adding it now would pull in timezone
+  # and desugaring deps we don't need for the MVP build.
+
+  # Utilities
+  intl: ^0.19.0
+  package_info_plus: ^9.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

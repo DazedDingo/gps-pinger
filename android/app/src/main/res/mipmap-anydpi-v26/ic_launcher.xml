@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive icon for API 26+.
+
+  Deliberately neutral per PLAN.md "Icon style: neutral / disguised" — just a
+  Material location-pin glyph on a dark background. A future Phase 6 polish
+  pass can swap this for a richer design if the user wants branding.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background"/>
+    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+    <monochrome android:drawable="@drawable/ic_launcher_foreground"/>
+</adaptive-icon>

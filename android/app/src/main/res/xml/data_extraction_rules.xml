@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  allowBackup=false already disables cloud backup. These rules belt-and-brace
+  the data-extraction pipeline on Android 12+ (API 31+) by excluding every
+  known path — the encrypted DB passphrase is keystore-bound and must not
+  travel off-device, and restoring the DB onto a different device would brick
+  it anyway (new keystore master key).
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root"/>
+        <exclude domain="file"/>
+        <exclude domain="database"/>
+        <exclude domain="sharedpref"/>
+        <exclude domain="external"/>
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root"/>
+        <exclude domain="file"/>
+        <exclude domain="database"/>
+        <exclude domain="sharedpref"/>
+        <exclude domain="external"/>
+    </device-transfer>
+</data-extraction-rules>
