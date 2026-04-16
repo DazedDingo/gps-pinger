@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import '../models/ping.dart';
 import 'battery_network_service.dart';
 import 'cell_wifi_service.dart';
+import 'geo_client.dart';
 
 /// Wraps geolocator + ancillary sensors into a single "get a ping" call.
 ///
@@ -15,12 +16,15 @@ import 'cell_wifi_service.dart';
 class LocationService {
   final BatteryNetworkService _batteryNet;
   final CellWifiService _cellWifi;
+  final GeoClient _geo;
 
   LocationService({
     BatteryNetworkService? batteryNet,
     CellWifiService? cellWifi,
+    GeoClient? geo,
   })  : _batteryNet = batteryNet ?? BatteryNetworkService(),
-        _cellWifi = cellWifi ?? CellWifiService();
+        _cellWifi = cellWifi ?? CellWifiService(),
+        _geo = geo ?? const GeoClientImpl();
 
   /// Attempts a single fix with [accuracy] inside a [timeout] budget.
   /// Returns a populated [Ping] (with `source`), or a `no_fix` Ping with the
@@ -33,7 +37,7 @@ class LocationService {
     final now = DateTime.now().toUtc();
     final bn = await _batteryNet.snapshot();
 
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    final serviceEnabled = await _geo.isLocationServiceEnabled();
     if (!serviceEnabled) {
       return Ping(
         timestampUtc: now,
@@ -44,7 +48,7 @@ class LocationService {
       );
     }
 
-    final perm = await Geolocator.checkPermission();
+    final perm = await _geo.checkPermission();
     if (perm == LocationPermission.denied ||
         perm == LocationPermission.deniedForever) {
       return Ping(
@@ -57,11 +61,9 @@ class LocationService {
     }
 
     try {
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: LocationSettings(
-          accuracy: accuracy,
-          timeLimit: timeout,
-        ),
+      final pos = await _geo.getCurrentPosition(
+        accuracy: accuracy,
+        timeLimit: timeout,
       );
       // Passive cell/Wi-Fi — best-effort, failures leave the fields null.
       final cellId = await _cellWifi.cellId();
