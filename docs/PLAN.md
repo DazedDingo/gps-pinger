@@ -1,126 +1,247 @@
-# GPS Pinger — Implementation Plan (living design doc)
+# Trail — Implementation Plan (living design doc)
 
 Status: design phase, not yet implemented. Owned by Zach (DazedDingo).
 Last updated: 2026-04-16.
 
 ## Goal
 
-A personal-safety + curious-data-gathering app that runs constantly on an Android phone, fully offline. Pings GPS every 6 hours, writes encrypted local log, renders an in-app offline map of history, supports panic-ping on demand, and exports GPX/CSV.
+A personal-safety + curious-data-gathering app that runs constantly on an Android phone, fully offline. Pings GPS every 4 hours, writes encrypted local log, renders an in-app offline map of history, supports panic-ping (on-demand or widget/tile-triggered) that optionally auto-shares location to pre-configured contacts, and exports GPX/CSV.
 
-## Confirmed requirements
+## Product identity
 
-- Platform: Flutter, Android-only.
-- Cadence: one scheduled GPS ping every 6 hours. No internet dependency.
-- Data per ping: timestamp, lat, lon, accuracy, altitude, battery %, network state, source (`scheduled` | `panic`), optional note.
-- Storage: SQLite encrypted with SQLCipher. Key derived via Android Keystore (via `flutter_secure_storage`) — no user PIN for MVP.
-- Panic ping: prominent manual button, high-accuracy fix, optional short note, runs in a short-lived foreground service to guarantee completion.
-- Reliability UI: home screen shows "last successful ping" timestamp; heartbeat card turns red if >7h since last ping. "No fix" rows logged when 2-min GPS budget expires so gaps are never silent.
-- Export: GPX + CSV via share sheet.
-- In-app map: raster tile offline map (MBTiles), shows pings as pins colour-coded by source, with a time slider.
+- **App display name:** `Trail`
+- **Android `applicationId`:** `com.dazeddingo.trail` (proposed — stable, reverse-DNS, Play-ready if ever published)
+- **Repo / working title:** `gps-pinger` (repo name stays — low-churn)
+- **Icon style:** neutral / disguised (generic compass or map pin, blends in with default system apps — intentionally not branded)
+- **Theme:** dark mode default (user preference across all their apps)
+
+## Battery budget — **top priority: negligible impact**
+
+Battery conservation is an explicit design constraint. The app must be invisible in daily battery stats. Every feature below is scrutinised against this:
+
+### Hard rules
+- **No persistent foreground service for scheduled pings.** Only WorkManager / AlarmManager for the every-4h job. Foreground service exists ONLY during an active panic-continuous session.
+- **No background service between pings.** App process should be fully dead between windows.
+- **No polling loops anywhere.** Everything scheduled-or-event-driven.
+- **No `LocationAccuracy.best` for scheduled pings.** Use `LocationAccuracy.high` (or Fused balanced) — good enough at human scale, uses GPS efficiently. `best` is reserved for panic pings where the tradeoff is worth it.
+- **GPS radio on for as little time as possible per ping.** Target: acquire fix, stop updates, release client. Typical 10–30s warm, up to 2min cold. Never leave GPS streaming.
+- **No wake-lock beyond the WorkManager worker lifetime.** WorkManager handles this automatically — don't add custom wake locks.
+- **Screen stays off** — worker must not wake the display.
+- **Cell / Wi-Fi capture is passive.** Read last-known cell-info and last-known Wi-Fi info; do NOT trigger active scans. If data is stale/unavailable, skip the field.
+- **No Doze-busting for scheduled pings.** Exact alarms (Phase 5) are opt-in and explicitly labelled "higher battery use" in settings.
+
+### Estimated cost per ping (scheduled)
+- GPS fix acquisition: ~20–40 mA for 15–60s → ≈0.2–0.6 mAh per ping
+- SQLCipher write + small compute: negligible
+- At 4h cadence: 6 pings/day × ~0.4 mAh average ≈ **2–3 mAh/day** ≈ ~0.05% of a 5000 mAh battery
+- Retry-once-after-5min adds at most one extra fix per failure window
+
+### Panic burst (user-triggered only)
+- Continuous mode 1–2min cadence × up to 60min = ~30 fixes + visible foreground service
+- Expected cost: ~20–40 mAh per panic session (≈1% of battery for a 60-min panic)
+- Acceptable because it's user-initiated and safety-critical
+
+### Verification plan
+- Phase 1 includes a diagnostic screen showing "last N worker runs" — duration, success, power-relevant events
+- Before release, sanity-check via Android Settings → Battery → App usage over a few days; target <1% allocation attributed to Trail
+- Fix any hotspot in Phase 6 polish if observed above baseline
+
+## Confirmed requirements (decisions log)
+
+### Core cadence & data
+- **Platform:** Flutter, Android-only
+- **Cadence:** one scheduled ping every **4 hours**
+- **Data per ping:** timestamp (UTC), lat, lon, accuracy, altitude, heading, speed, battery %, network state, nearby cell-tower ID, nearby Wi-Fi SSID, source (`scheduled` | `panic` | `boot` | `no_fix`), optional note
+- **Retry on failed scheduled ping:** log `no_fix` row, retry **once 5 min later**, then wait until next 4h window
+- **Retention:** keep forever. Provide a manual "archive older than X" flow that exports to GPX/CSV then deletes from DB. No auto-prune.
+
+### Scheduling behaviour
+- **Sleep window:** none — always ping every 4h regardless of time or charge state
+- **Low-battery policy:** drop to **8h cadence below 20%**, **stop entirely below 5%** (log `no_fix` rows with battery note during stop)
+- **Device off / reboot:** on boot, log a `boot` row immediately AND trigger a fresh ping attempt (don't wait for next scheduled window)
+
+### Panic
+- **Panic ping:** prominent in-app button, plus Android **quick-settings tile** AND **home-screen widget** for one-tap invocation without opening app
+- **Continuous mode:** after panic triggered, keep pinging every 1–2 min via foreground service with visible notification, for a **user-configurable duration (15 / 30 / 60 min)**, then auto-stop
+- **Panic receipt:** visible local notification "Panic ping logged at HH:MM — [coords]" (scheduled pings stay silent — too frequent to notify)
+- **Panic external share:** maintain a list of pre-configured emergency contacts in settings. On panic, open the **default SMS app pre-filled** with those recipients and message text (`PANIC at HH:MM — https://maps.google.com/?q=lat,lon`). User still taps "send" — no `SEND_SMS` permission used (Play Store scrutiny, and keeps user in control).
+- **Impact detection / auto-panic:** no (rejected — false positives, battery cost)
+- **Duress PIN:** no (rejected — overkill)
+
+### Security
+- **Storage:** SQLite encrypted with **SQLCipher**. Key derived via Android Keystore (via `flutter_secure_storage`). No user-set passphrase.
+- **App lock:** **biometric only** (fingerprint/face) on app open, with device-PIN fallback via `local_auth`
+- **Backup:** `android:allowBackup="false"` in manifest — DB does not survive cloud restore
+- **Contacts data:** emergency contacts stored inside the encrypted DB, not in shared prefs
+
+### Map (offline)
+- **Engine:** `flutter_map` + **raster MBTiles** via `flutter_map_mbtiles`
+- **Tiles:** built externally on PC (tilemaker / OpenMapTiles), sideloaded into app's documents dir, managed by in-app regions screen
+- **Initial region:** **UK only**; additional regions installable ad hoc
+- **Default viewport:** fit bounding box of all pings in the currently selected time range
+- **Paths:** pins only by default; line overlay available behind a toggle (at 4h intervals lines misrepresent actual travel)
+
+### Reliability surfacing
+- Home screen shows "last successful ping" timestamp prominently
+- Heartbeat card turns red if `now - lastPingTs > 5h` (slight buffer past 4h cadence)
+- `no_fix` rows so gaps are never silent
+
+### Export
+- GPX + CSV via share sheet. Notes included in GPX `<desc>` tag.
+
+### Onboarding (first launch)
+Full walkthrough:
+1. Intro — what Trail does
+2. Permissions — fine location, then background location education
+3. Battery-optimization exemption prompt + `SCHEDULE_EXACT_ALARM`
+4. Set emergency contacts (optional — can skip, add later)
+5. Set home location (optional — used for "home radius" features if added later)
+6. Enable biometric lock
+7. Done
+
+### Release / CI
+- Match watchnext — every push to `main` auto-builds APK and publishes GitHub Release
+- Fork watchnext's `.github/workflows/release.yml`, reuse pinned `DEBUG_KEYSTORE_B64` pattern for stable SHA-1. No `google-services.json` step (Trail uses no Google services).
 
 ## Repo
 
-- Name: `DazedDingo/gps-pinger` (working title — open to rename).
-- Local path: `/home/ubuntu/projects/gps-pinger`.
-- CI: fork of `watchnext/.github/workflows/release.yml` — push to `main` auto-builds and publishes APK to GitHub Releases. Reuse pinned `DEBUG_KEYSTORE_B64` pattern for consistent SHA-1 (no Google services needed, so no `GOOGLE_SERVICES_JSON` step).
-- Stack: Flutter (Dart ^3.11), Riverpod, go_router — matches `watchnext`/`groceries-app`.
+- GitHub: `https://github.com/DazedDingo/gps-pinger` (public)
+- Local path: `/home/ubuntu/projects/gps-pinger`
+- Stack: Flutter (Dart ^3.11), Riverpod, go_router — matches `watchnext` / `groceries-app`
 
 ## Directory / file structure
 
 ```
 lib/
   main.dart
-  app.dart                         # MaterialApp + router
-  models/ping.dart                 # Ping data class + enum PingSource
+  app.dart                         # MaterialApp + router; dark theme default
+  models/
+    ping.dart                      # Ping data class + enum PingSource
+    emergency_contact.dart
   db/
     database.dart                  # SQLCipher open + migrations
     ping_dao.dart                  # insert/query/paginate
+    contact_dao.dart
     keystore_key.dart              # Keystore-backed DB key
   services/
     location_service.dart          # geolocator wrapper, scheduled + panic fetch
     battery_network_service.dart   # battery_plus + connectivity_plus snapshot
+    cell_wifi_service.dart         # cell tower ID + Wi-Fi SSID (via plugin or MethodChannel)
+    biometric_service.dart         # local_auth wrapper
     scheduler/
       workmanager_scheduler.dart   # PeriodicWorkRequest baseline
       alarm_scheduler.dart         # AlarmManager exact fallback (MethodChannel)
       scheduler.dart               # abstract + selection logic
-    permissions_service.dart       # staged permission flow
+    permissions_service.dart       # staged permission flow + battery-opt
+    panic/
+      panic_service.dart           # foreground service controller, continuous mode
+      panic_share_builder.dart     # compose SMS text + recipients
     export/
       gpx_exporter.dart
       csv_exporter.dart
+      archive_service.dart         # "archive older than X" flow
     tiles/
       mbtiles_source.dart          # flutter_map TileProvider backed by MBTiles
       region_manager.dart          # install/remove .mbtiles in app docs dir
-  providers/                       # Riverpod: pingListProvider, lastPingProvider, healthProvider
+  providers/                       # Riverpod: pingListProvider, lastPingProvider, healthProvider, contactsProvider
   screens/
+    onboarding/                    # 7-step flow
     home_screen.dart               # last-ping card, heartbeat status, panic button
-    history_screen.dart            # list view
-    map_screen.dart                # flutter_map + ping pins + time slider
+    history_screen.dart
+    map_screen.dart                # flutter_map + ping pins + time slider + path toggle
     export_screen.dart
-    regions_screen.dart            # manage installed tile regions
-    settings_screen.dart           # permissions, battery-opt, scheduler mode, diag
+    archive_screen.dart
+    regions_screen.dart
+    contacts_screen.dart           # manage emergency contacts
+    settings_screen.dart           # permissions, battery-opt, scheduler mode, panic duration, diag
+  widgets/
+    panic_button.dart              # reused in home + widget + quick-tile
 android/
-  app/src/main/kotlin/.../AlarmReceiver.kt
+  app/src/main/kotlin/.../
+    AlarmReceiver.kt               # exact-alarm fallback
+    BootReceiver.kt                # triggers boot-row ping
+    PanicQSTileService.kt          # quick-settings tile
+    PanicWidgetProvider.kt         # home-screen widget
+    PanicForegroundService.kt      # continuous panic + panic SMS intent
   app/src/main/AndroidManifest.xml
 .github/workflows/release.yml
+docs/
+  PLAN.md                          # this file
+  TILES.md                         # (Phase 3) tile build pipeline
 ```
 
-## Plugin choices (sanity-checked against Flutter 3.x)
+## Plugin choices (Flutter 3.x)
 
 - `geolocator` ^13
 - `workmanager` ^0.5
 - `sqflite_sqlcipher` ^3
 - `flutter_secure_storage` ^9
+- `local_auth` ^2 — biometric gate
 - `permission_handler` ^11
 - `battery_plus` ^6, `connectivity_plus` ^6
 - `share_plus` ^10
-- `flutter_local_notifications` ^17 (missed-heartbeat warnings only)
-- `flutter_map` ^7 + `flutter_map_mbtiles` — offline raster tile rendering
+- `flutter_local_notifications` ^17 — panic receipt + missed-heartbeat warnings
+- `flutter_map` ^7 + `flutter_map_mbtiles` — offline raster tiles
+- `home_widget` ^0.6 — home-screen widget bridging
 - `path_provider`, `intl`, `package_info_plus`
 - Riverpod ^2.5, go_router ^14
+- Native Kotlin: quick-settings tile, widget, boot receiver, foreground service, cell/Wi-Fi info
 
 ## Phased milestones
 
 ### Phase 1 — MVP (logs + exports)
-Scaffold, encrypted DB with Keystore key, `LocationService.getScheduledPing()`, `WorkManager` 6h PeriodicWorkRequest, home screen (last ping card + history list), GPX + CSV export via share sheet, staged permission flow (fine → background → "Allow all the time" education dialog). **Demo:** install, grant permissions, see pings accumulate over a day, export to GPX, open in OsmAnd.
+Scaffold, encrypted DB with Keystore key, `LocationService.getScheduledPing()` (includes heading/speed/battery/network/cell/Wi-Fi), `WorkManager` 4h PeriodicWorkRequest with retry-once-after-5min on no-fix, boot receiver logging `boot` row + triggering immediate ping, low-battery policy, home screen (last ping card + heartbeat + history list), GPX + CSV export via share sheet, staged permission flow, biometric gate on app open. Dark theme. **Demo:** install, onboard, grant permissions, see pings accumulate over a day, biometric unlocks app, export to GPX, open in OsmAnd.
 
-### Phase 2 — Panic ping + reliability
-Big panic button on home with note field; panic path starts a short-lived foreground service (`foregroundServiceType="location"`) to guarantee a fix within 2min. Heartbeat card turns red if `now - lastPingTs > 7h`. Battery-optimization exemption prompt on first launch. **Demo:** hit panic outdoors, high-accuracy row appears immediately with note.
+### Phase 2 — Panic + emergency contacts
+Panic button on home + dedicated panic foreground service + continuous mode with configurable 15/30/60 min duration. Panic receipt notification. Emergency contacts screen (add/edit/delete contacts, stored in encrypted DB). Panic-share builder opens SMS app pre-filled with recipients and location text. **Demo:** hit panic, SMS app opens with contacts + maps link, continuous mode runs for chosen duration then auto-stops.
 
-### Phase 3 — Offline map
-Raster MBTiles. `regions_screen` lets user install one or more `.mbtiles` files into the app's documents dir (via file picker — tiles are built externally on PC with `tilemaker`/OpenMapTiles, not downloaded at runtime). `map_screen` renders installed tiles via `flutter_map_mbtiles` and overlays ping pins colour-coded by source. Time slider to scrub history. **Demo:** install a UK-region `.mbtiles`, open map with a month of pings plotted.
+### Phase 3 — Quick-settings tile + home-screen widget
+Native Kotlin quick-settings tile service and home-screen widget, both triggering panic via same foreground-service entry point. **Demo:** add widget, swipe down for tile, one-tap panic without opening the app.
 
-### Phase 4 — Scheduling hardening
-Add `AlarmManager.setExactAndAllowWhileIdle` path behind a MethodChannel (`SCHEDULE_EXACT_ALARM` on API 31+, `USE_EXACT_ALARM` on 33+). Settings screen lets user pick WorkManager vs exact-alarm mode and view last N scheduling events. **Demo:** toggle modes, compare punctuality over a week.
+### Phase 4 — Offline map
+Raster MBTiles. Regions screen (install / delete `.mbtiles` via file picker). Map screen with pins, time slider, path-line toggle, bbox-fit default viewport. Document tile build pipeline in `docs/TILES.md`. **Demo:** install UK `.mbtiles`, open map with a month of pings plotted.
 
-### Phase 5 — Polish
-In-app diagnostics (permission matrix, doze state, last 20 worker runs), DB integrity check, export filtering by date range, app icon + adaptive icon, heatmap overlay on map screen (nice-to-have).
+### Phase 5 — Scheduling hardening + archive
+Add `AlarmManager.setExactAndAllowWhileIdle` path behind MethodChannel (`SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM`). Settings exposes WorkManager vs exact-alarm mode + last N scheduling events. Archive flow (export-and-delete older than X). **Demo:** toggle scheduler modes, compare punctuality over a week; archive a year of pings out to file and confirm DB shrunk.
+
+### Phase 6 — Polish
+Diagnostics screen (permission matrix, Doze state, last 20 worker runs), DB integrity check, date-range export filter, adaptive icon, heatmap overlay on map, home location feature if scoped.
 
 ## Architectural risks & mitigations
 
-1. **Doze clustering** — PeriodicWorkRequest has no exactness guarantee. Mitigation: dual-path scheduling (Phase 4), visible heartbeat staleness, battery-opt exemption, "no fix" rows so gaps are never silent.
-2. **Cold GPS fix without A-GPS** can exceed 2min. Mitigation: configurable budget, log partial/failed attempts.
-3. **Background-location grant friction** on Android 11+. Mitigation: onboarding screen with explicit "Allow all the time" instruction and `permission_handler.openAppSettings()` deep link.
-4. **Keystore key loss on backup restore** could brick DB. Mitigation: detect open failure, offer "reset DB" with warning; disable cloud backup of app data (`allowBackup="false"` in manifest).
-5. **SQLCipher + WorkManager isolate**: background isolate must re-init plugin registry and re-open encrypted DB. Verify early in Phase 1 (known sharp edge).
-6. **Tile file size**: UK-wide raster MBTiles at reasonable zoom can be several hundred MB. Mitigation: user picks regions to install; unused regions deletable from `regions_screen`.
+1. **Doze clustering** — PeriodicWorkRequest has no exactness guarantee. Mitigation: dual-path scheduling (Phase 5), visible heartbeat staleness, battery-opt exemption, `no_fix` rows.
+2. **Cold GPS fix without A-GPS** can exceed 2 min. Mitigation: 2-min budget + retry-once-after-5min policy; log partial/failed attempts.
+3. **Background-location grant friction** on Android 11+. Mitigation: onboarding screen explicit "Allow all the time" instruction, `permission_handler.openAppSettings()` deep link.
+4. **Keystore key loss on backup restore** could brick DB. Mitigation: `allowBackup="false"`; also detect open failure and offer "reset DB" with warning.
+5. **SQLCipher + WorkManager isolate**: background isolate must re-init plugin registry and re-open encrypted DB. Verify early in Phase 1.
+6. **Panic foreground service Android 14+** — `foregroundServiceType="location"` now also needs `FOREGROUND_SERVICE_LOCATION` runtime permission. Handle in permission flow.
+7. **Quick-settings tile + widget talking to Flutter isolate** — safest pattern is fire Android Intent to a foreground service in native Kotlin, which writes a `panic` ping directly via platform channel to Flutter isolate OR writes directly to the SQLCipher DB through a native binding. Decide this when Phase 3 starts; easiest MVP is native Kotlin writes a marker file, Flutter picks it up on next launch — but that breaks real-time panic. Revisit.
+8. **Tile file size** — UK-wide raster MBTiles can be 200–600MB. Mitigation: regions screen lets user delete unused regions; don't bundle default tiles in APK.
+9. **Cell tower / Wi-Fi SSID capture** — stock Android 12+ requires `ACCESS_FINE_LOCATION` + dedicated `NEARBY_WIFI_DEVICES` for Wi-Fi scan. Treat as optional field — if denied, just skip and log the rest.
 
 ## Testing strategy
 
-- Unit-testable: GPX/CSV serializers, Ping model, DAO against in-memory SQLCipher DB, heartbeat-staleness logic, MBTiles tile-lookup. Target ~70% coverage here.
-- Mocked: `LocationService` behind an interface so providers/screens test without GPS.
-- Manual-QA-only: WorkManager cadence (multi-day soak), AlarmManager exactness, permission dialogs, panic FG service, Doze behaviour (`adb shell dumpsys deviceidle force-idle`), live map rendering.
+- Unit-testable: GPX/CSV serializers, Ping/Contact models, DAO against in-memory SQLCipher DB, heartbeat-staleness logic, low-battery policy transitions, MBTiles tile-lookup, panic-share message builder.
+- Mocked: `LocationService`, `BatteryNetworkService`, `CellWifiService` behind interfaces so providers/screens test without hardware.
+- Manual-QA-only: WorkManager cadence (multi-day soak), AlarmManager exactness, permission dialogs, panic FG service, quick-tile + widget triggers, Doze behaviour (`adb shell dumpsys deviceidle force-idle`), biometric gate, live map rendering, SMS hand-off.
 
-## Tile sourcing (one-time, on PC — not runtime)
+## Tile sourcing (Phase 4, one-time, on PC — not runtime)
 
-- Download OpenStreetMap regional extract from Geofabrik (e.g. `great-britain-latest.osm.pbf`).
-- Render to raster MBTiles with `tilemaker` or use a pre-built raster MBTiles source.
-- Copy `.mbtiles` file to phone via USB or share, then install into app via `regions_screen`.
-- Document the exact command/pipeline in `docs/TILES.md` when Phase 3 starts.
+- Download OpenStreetMap regional extract from Geofabrik (`great-britain-latest.osm.pbf`)
+- Render to raster MBTiles with `tilemaker` using OpenMapTiles style, or use a pre-built raster MBTiles source
+- Copy `.mbtiles` file to phone, install into app via regions screen
+- Full pipeline in `docs/TILES.md` when Phase 4 starts
 
-## Open questions
+## Resolved items (previously open)
 
-- **Regions covered?** — UK only for MVP, plus ad-hoc additions when travelling? Confirm before Phase 3.
-- **Retention policy** — keep forever, or auto-prune after N months? Default: forever.
-- **Panic notification** — fire a local notification as visible receipt? Leaning yes, Phase 2.
-- **Versioning** — push-to-main-auto-releases (like watchnext), or gate behind tags? Leaning match-watchnext.
-- **Repo visibility** — public or private on GitHub? Safety app, so private by default unless user says otherwise.
+- Retention: forever with manual archive flow (answered — was Q13)
+- Panic notification: visible for panic, silent for scheduled (answered — was Q14)
+- Versioning: push-to-main auto-releases (answered — was Q15)
+- Regions: UK now, others later (answered earlier)
+- Encryption: yes, Keystore-derived, no user PIN (answered earlier)
+
+## Still open (nothing blocking Phase 1)
+
+- Accent colour / exact palette for dark theme — pick during Phase 1 scaffold
+- Should onboarding "home location" step let user pick on a mini-map, or just store GPS at time of setup? Decide when building onboarding
+- Quick-tile / widget → Flutter isolate IPC strategy — decide when Phase 3 starts (see risk #7)
