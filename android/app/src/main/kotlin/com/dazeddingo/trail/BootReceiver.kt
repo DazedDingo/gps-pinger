@@ -6,7 +6,7 @@ import android.content.Intent
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import be.tramckrijte.workmanager.BackgroundWorker
+import dev.fluttercommunity.workmanager.BackgroundWorker
 
 /**
  * Fires on BOOT_COMPLETED (and MY_PACKAGE_REPLACED so upgrades also re-arm).
@@ -33,7 +33,6 @@ class BootReceiver : BroadcastReceiver() {
 
         val inputData = androidx.work.Data.Builder()
             .putString(DART_TASK_KEY, BOOT_TASK_NAME)
-            .putBoolean(IS_IN_DEBUG_MODE_KEY, false)
             .build()
 
         val request = OneTimeWorkRequestBuilder<BackgroundWorker>()
@@ -54,10 +53,11 @@ class BootReceiver : BroadcastReceiver() {
         private const val TAG_BOOT = "trail:boot"
         private const val UNIQUE_NAME = "trail_boot_ping_unique"
 
-        // Keys the workmanager plugin's BackgroundWorker reads out of
+        // Key the workmanager plugin's BackgroundWorker reads out of
         // WorkRequest input data. Stable public contract of the plugin
-        // (see workmanager/android/src/main/kotlin/.../BackgroundWorker.kt).
-        private const val DART_TASK_KEY = "be.tramckrijte.workmanager.DART_TASK"
-        private const val IS_IN_DEBUG_MODE_KEY = "be.tramckrijte.workmanager.IS_IN_DEBUG_MODE_KEY"
+        // (see workmanager_android-0.9.x/.../BackgroundWorker.kt). The
+        // package was renamed from `be.tramckrijte` → `dev.fluttercommunity`
+        // when the plugin moved to the Flutter Community org.
+        private const val DART_TASK_KEY = "dev.fluttercommunity.workmanager.DART_TASK"
     }
 }

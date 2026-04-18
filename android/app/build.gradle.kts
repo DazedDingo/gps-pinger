@@ -44,6 +44,14 @@ dependencies {
     // flutter_local_notifications uses java.time APIs — core library
     // desugaring lets them work on minSdk 23.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
+
+    // androidx.work is no longer exported transitively by workmanager 0.9.x
+    // (was an `api` dep in 0.5.x, now `implementation`). BootReceiver.kt
+    // references WorkManager / OneTimeWorkRequestBuilder / ExistingWorkPolicy
+    // directly, so we need to declare it ourselves. Version pinned to match
+    // workmanager_android-0.9.0+2's transitive dep to avoid double-classpath
+    // surprises.
+    implementation("androidx.work:work-runtime-ktx:2.10.2")
 }
 
 flutter {

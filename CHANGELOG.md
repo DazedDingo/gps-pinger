@@ -4,6 +4,23 @@ All notable changes to **Trail** (gps-pinger) are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.1.2+3] — 2026-04-18
+
+### Fixed
+
+- **Native `BootReceiver` against workmanager 0.9.x.** Bumping the plugin
+  in 0.1.1+2 fixed the Dart-side compile but the native `BootReceiver.kt`
+  still imported `be.tramckrijte.workmanager.BackgroundWorker`. The
+  plugin moved to the Flutter Community org — package is now
+  `dev.fluttercommunity.workmanager` and the input-data key changed to
+  `dev.fluttercommunity.workmanager.DART_TASK`. Also dropped the now-
+  unused `IS_IN_DEBUG_MODE_KEY` (replaced by `WorkmanagerDebug` handlers).
+- **Declared `androidx.work:work-runtime-ktx:2.10.2` directly.**
+  workmanager_android 0.9.x downgraded its `androidx.work` dep from `api`
+  to `implementation`, so it's no longer transitive. `BootReceiver`
+  references `WorkManager`, `OneTimeWorkRequestBuilder`, and
+  `ExistingWorkPolicy` directly and now declares its own dep.
+
 ## [0.1.1+2] — 2026-04-18
 
 ### Fixed
