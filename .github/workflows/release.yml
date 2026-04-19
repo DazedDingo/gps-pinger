@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
 
+env:
+  # The SHA-1 the APK MUST be signed with — matches the committed keystore
+  # at android/app/debug.keystore. If this value drifts at build time the
+  # build fails loudly instead of shipping an unsignable-upgrade APK.
+  EXPECTED_SHA1: 67:25:31:A5:72:75:DC:16:F4:F6:6A:14:8F:D7:78:B0:E3:65:C8:EC
+
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
@@ -18,19 +24,52 @@ jobs:
           channel: stable
           cache: true
 
-      # Pinned debug keystore gives a stable SHA-1 across releases. Trail
-      # doesn't need SHA-1 registration (no Google Sign-In / Firebase) but
-      # we keep the pattern so every APK signs with the same key and users
-      # can update without reinstalling.
-      - name: Restore debug keystore (stable signing SHA)
+      - name: Verify pinned keystore is present
+        # The keystore lives in-tree at android/app/debug.keystore so both
+        # local and CI builds sign identically. If it's missing something
+        # wiped it and we must not ship — a regenerated keystore would give
+        # every user an "upgrade requires uninstall" surprise.
         run: |
-          mkdir -p ~/.android
-          echo '${{ secrets.DEBUG_KEYSTORE_B64 }}' | base64 -d > ~/.android/debug.keystore
+          if [ ! -f android/app/debug.keystore ]; then
+            echo "::error::android/app/debug.keystore is missing from the checkout."
+            exit 1
+          fi
+          if ! keytool -list -keystore android/app/debug.keystore \
+              -storepass android -alias androiddebugkey > /dev/null 2>&1; then
+            echo "::error::Pinned keystore is unreadable with the default password."
+            exit 1
+          fi
+          echo "Pinned keystore fingerprint:"
+          keytool -list -v -keystore android/app/debug.keystore \
+            -storepass android -alias androiddebugkey | grep -E 'SHA1:|SHA256:'
 
       - run: flutter pub get
 
       - name: Build APK
         run: flutter build apk --release
+
+      - name: Verify APK is signed with the expected keystore
+        # If AGP sidesteps our pinned signingConfig for any reason, the APK's
+        # cert SHA-1 will not match EXPECTED_SHA1 and this step fails. That
+        # stops us from ever shipping a release that can't upgrade existing
+        # installs.
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          APKSIGNER=$(ls -t $ANDROID_HOME/build-tools/*/apksigner 2>/dev/null | head -1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner not found in $ANDROID_HOME/build-tools"
+            exit 1
+          fi
+          echo "Using apksigner: $APKSIGNER"
+          CERTS=$("$APKSIGNER" verify --print-certs "$APK")
+          echo "$CERTS"
+          ACTUAL=$(echo "$CERTS" | grep -i 'SHA-1 digest' | awk '{print $NF}')
+          EXPECTED_COMPACT=$(echo "$EXPECTED_SHA1" | tr -d ':' | tr 'A-F' 'a-f')
+          if [ "$ACTUAL" != "$EXPECTED_COMPACT" ]; then
+            echo "::error::APK signed with $ACTUAL but expected $EXPECTED_COMPACT — existing installs will reject the upgrade."
+            exit 1
+          fi
+          echo "✓ APK signed with the pinned keystore."
 
       - name: Get version from pubspec
         id: version

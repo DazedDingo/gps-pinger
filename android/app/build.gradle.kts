@@ -30,11 +30,23 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        // Pinned debug keystore (android/app/debug.keystore, committed).
+        // Every build — local and CI — signs against this exact keystore so
+        // APKs produced at any time install as upgrades without an uninstall.
+        // Before this, AGP silently generated a fresh `~/.android/debug.keystore`
+        // on each CI run and every release had a different SHA, forcing users
+        // to uninstall before installing the new APK.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
-            // Debug signing for now — CI restores a pinned debug keystore
-            // from DEBUG_KEYSTORE_B64 so the signing SHA is stable across
-            // releases (matches the watchnext pattern).
             signingConfig = signingConfigs.getByName("debug")
         }
     }
