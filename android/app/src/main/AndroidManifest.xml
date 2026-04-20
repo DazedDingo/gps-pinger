@@ -125,6 +125,20 @@
                 android:resource="@xml/panic_widget_info"/>
         </receiver>
 
+        <!-- Phase 5 exact-alarm receiver. Fires at the user's 4h cadence
+             when scheduling mode is "precise" (Settings → Scheduling).
+             Not exported: only our own [ExactAlarmScheduler] schedules
+             the alarm that routes here. On fire, re-enters the Flutter
+             isolate via BackgroundWorker (same path as BootReceiver) and
+             schedules the next exact alarm. -->
+        <receiver
+            android:name=".ExactAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.dazeddingo.trail.EXACT_SCHEDULED_PING"/>
+            </intent-filter>
+        </receiver>
+
         <!-- Boot marker: enqueues a one-off WorkManager task that logs a
              `boot` row and triggers an immediate GPS fix. -->
         <receiver

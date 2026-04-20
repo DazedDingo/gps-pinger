@@ -19,5 +19,6 @@ class MainActivity : FlutterFragmentActivity() {
         super.configureFlutterEngine(flutterEngine)
         CellWifiPlugin.register(flutterEngine, applicationContext)
         PanicMethodChannel.register(flutterEngine, applicationContext)
+        SchedulerMethodChannel.register(flutterEngine, applicationContext)
     }
 }

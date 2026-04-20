@@ -10,9 +10,10 @@ import '../../services/scheduler/workmanager_scheduler.dart';
 /// 7-step onboarding, one PageView page per step.
 ///
 /// Ordering is load-bearing (fine-location must precede background-location
-/// on Android 11+). Contacts + home-location are present as stubs that only
-/// store empty state — the real forms land in Phase 2 (panic) and
-/// potentially Phase 6 (home location).
+/// on Android 11+). The contacts and home-location steps are informational
+/// pointers: emergency contacts ship in the full Settings → Emergency
+/// contacts screen (shipped in 0.2.0+11 alongside panic), and home location
+/// is still pending (Phase 6).
 class OnboardingFlow extends ConsumerStatefulWidget {
   const OnboardingFlow({super.key});
 
@@ -251,9 +252,10 @@ class _ContactsStubStep extends StatelessWidget {
       icon: Icons.contacts_outlined,
       title: 'Emergency contacts (optional)',
       body:
-          'Later you\'ll be able to add emergency contacts here so a panic '
-          'ping can pre-fill an SMS. For now, skip — you can add them from '
-          'Settings once the app is set up.',
+          'If you hit the panic button on the home screen, Trail can pre-fill '
+          'an SMS to people you trust with your last known location. Skip for '
+          'now — once setup finishes, open Settings → Emergency contacts to '
+          'add them.',
     );
   }
 }

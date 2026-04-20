@@ -12,9 +12,11 @@ import '../models/ping.dart';
 import '../providers/backup_provider.dart';
 import '../providers/panic_provider.dart';
 import '../providers/pings_provider.dart';
+import '../providers/scheduler_provider.dart';
 import '../services/panic/panic_service.dart';
 import '../services/passphrase_service.dart';
 import '../services/permissions_service.dart';
+import '../services/scheduler/scheduler_mode.dart';
 import '../services/scheduler/workmanager_scheduler.dart';
 
 /// Diagnostics + permissions console.
@@ -148,6 +150,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             },
           ),
           const Divider(),
+          const _SectionHeader('Scheduling'),
+          const _SchedulerModeTile(),
+          const _SchedulerEventsTile(),
+          const Divider(),
           const _SectionHeader('Permissions'),
           _PermissionTile(
             icon: Icons.battery_saver_outlined,
@@ -203,6 +209,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/regions'),
+          ),
+          const Divider(),
+          const _SectionHeader('History'),
+          ListTile(
+            leading: const Icon(Icons.archive_outlined),
+            title: const Text('Archive older pings'),
+            subtitle: const Text(
+              'Export to GPX/CSV and delete from the app. Retention is '
+              'otherwise forever (PLAN.md).',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/archive'),
           ),
           const Divider(),
           const _SectionHeader('Cloud backup'),
@@ -300,6 +318,164 @@ class _PermissionTile extends StatelessWidget {
     if (s.isLimited) return 'LIMITED';
     return 'NOT GRANTED';
   }
+}
+
+/// Scheduler-mode toggle.
+///
+/// Two modes (PLAN.md Phase 5):
+///   - **Battery saver (WorkManager, default)**: system-batched periodic
+///     job; 4h cadence drops to 8h below 20% battery, skipped below 5%.
+///     Punctuality is "within a window" — Doze can stretch 4h to 6–8h.
+///   - **Precise (exact alarms)**: `setExactAndAllowWhileIdle` per ping
+///     at a fixed 4h cadence, regardless of battery. More frequent
+///     standalone wakeups = slightly higher battery cost.
+///
+/// The Precise toggle requires the `SCHEDULE_EXACT_ALARM` permission on
+/// API 31+. If the user flips to Precise without granting it, we flip
+/// back and show a SnackBar that deep-links to system settings via
+/// [ExactAlarmBridge.openExactAlarmSettings].
+class _SchedulerModeTile extends ConsumerWidget {
+  const _SchedulerModeTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(schedulerModeProvider);
+    return ListTile(
+      leading: const Icon(Icons.access_time_outlined),
+      title: const Text('Scheduling mode'),
+      subtitle: Text(
+        mode.asData?.value == SchedulerMode.exact
+            ? 'Precise — exact 4h alarms (slight battery cost).'
+            : 'Battery saver — WorkManager periodic (may stretch past 4h under Doze).',
+      ),
+      trailing: DropdownButton<SchedulerMode>(
+        value: mode.asData?.value,
+        onChanged: (v) async {
+          if (v == null) return;
+          if (v == SchedulerMode.exact) {
+            final can = await ExactAlarmBridge.canScheduleExactAlarms();
+            if (!can) {
+              await ExactAlarmBridge.openExactAlarmSettings();
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Grant "Alarms & reminders", then try again.',
+                  ),
+                ),
+              );
+              return;
+            }
+          }
+          final ok = await switchSchedulerMode(v);
+          ref.invalidate(schedulerModeProvider);
+          ref.invalidate(schedulerEventsProvider);
+          ref.invalidate(exactAlarmPermissionProvider);
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                ok
+                    ? 'Scheduling: ${v == SchedulerMode.exact ? "Precise" : "Battery saver"}.'
+                    : 'Could not switch — exact-alarm permission denied.',
+              ),
+            ),
+          );
+        },
+        items: const [
+          DropdownMenuItem(
+            value: SchedulerMode.workmanager,
+            child: Text('Battery saver'),
+          ),
+          DropdownMenuItem(
+            value: SchedulerMode.exact,
+            child: Text('Precise'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Expandable "last 20 scheduler events" panel — the observability
+/// surface for "did my 4h alarm actually fire?". Native code logs
+/// events on every schedule/fire/cancel (see
+/// `SchedulerEventsLog.kt`); we render them newest-first.
+class _SchedulerEventsTile extends ConsumerWidget {
+  const _SchedulerEventsTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final events = ref.watch(schedulerEventsProvider);
+    return ExpansionTile(
+      leading: const Icon(Icons.history_toggle_off),
+      title: const Text('Recent scheduling events'),
+      subtitle: Text(
+        events.asData?.value.isEmpty ?? true
+            ? 'None yet.'
+            : '${events.asData!.value.length} event(s), newest first.',
+      ),
+      children: [
+        events.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.all(12),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text('Error: $e'),
+          ),
+          data: (list) {
+            if (list.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'Empty — switch to Precise to start logging exact-alarm '
+                  'scheduling activity.',
+                ),
+              );
+            }
+            return Column(
+              children: [
+                for (final e in list)
+                  ListTile(
+                    dense: true,
+                    leading: Icon(_iconFor(e.kind), size: 18),
+                    title: Text(_humanKind(e.kind)),
+                    subtitle: Text(
+                      [
+                        DateFormat.yMd().add_Hms().format(e.timestamp.toLocal()),
+                        if (e.note != null) e.note,
+                      ].whereType<String>().join(' · '),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  IconData _iconFor(String kind) => switch (kind) {
+        'exact_scheduled' => Icons.alarm_add,
+        'exact_fired' => Icons.alarm_on,
+        'exact_cancelled' => Icons.alarm_off,
+        'exact_permission_denied' => Icons.block,
+        'mode_changed' => Icons.swap_horiz,
+        'workmanager_enqueued' => Icons.playlist_add,
+        _ => Icons.circle_outlined,
+      };
+
+  String _humanKind(String kind) => switch (kind) {
+        'exact_scheduled' => 'Exact alarm scheduled',
+        'exact_fired' => 'Exact alarm fired',
+        'exact_cancelled' => 'Exact alarm cancelled',
+        'exact_permission_denied' => 'Exact alarm permission denied',
+        'mode_changed' => 'Scheduling mode changed',
+        'workmanager_enqueued' => 'WorkManager task enqueued',
+        _ => kind,
+      };
 }
 
 /// Duration picker for the continuous-panic foreground service. Defaults

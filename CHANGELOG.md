@@ -4,6 +4,80 @@ All notable changes to **Trail** (gps-pinger) are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.5.0+14] — 2026-04-20
+
+### Added
+
+- **Phase 5: exact alarms + archive flow.** Closes out the two
+  scheduling-and-retention items the plan held back until the map and
+  regions work landed.
+
+  - **Scheduler mode toggle** (`Settings → Scheduling → Mode`). Two
+    options: **Battery saver** (default, WorkManager — the existing
+    4h periodic job, system-batched, battery-aware) and **Precise**
+    (Android `AlarmManager.setExactAndAllowWhileIdle` per ping, fires
+    ± a small window even under Doze at the cost of more frequent
+    standalone wakeups). Switching mode cancels the other side's
+    scheduled work so only one driver is ever active. Precise mode
+    requires `SCHEDULE_EXACT_ALARM` on API 31+; when denied, the tile
+    deep-links to the per-app settings page via
+    `Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM` and the mode
+    switch aborts cleanly instead of silently degrading.
+  - **Scheduler events** log (last 20, newest-first) surfaces on
+    Settings → Scheduling → Recent events. Native side records
+    `EXACT_SCHEDULED`, `EXACT_FIRED`, `EXACT_CANCELLED`,
+    `EXACT_PERMISSION_DENIED`, `MODE_CHANGED`, and
+    `WORKMANAGER_ENQUEUED`. Gives the user concrete evidence that the
+    4h cadence is actually firing instead of staring at the black box
+    of WorkManager.
+  - **Boot re-arm for exact mode.** `BootReceiver` reads
+    `SchedulerPrefs.isExactMode` and calls
+    `ExactAlarmScheduler.scheduleNext(context)` on
+    `BOOT_COMPLETED` / `MY_PACKAGE_REPLACED`, so the alarm chain
+    survives reboots and APK upgrades without waiting for the user
+    to open the app. The MethodChannel mirror
+    (`recordModeChanged`) writes the same prefs file so this works
+    even without the Flutter UI running.
+  - **Archive older pings** (`Settings → History → Archive older
+    pings`). Pick a cutoff date, pick export format (GPX + CSV
+    default, or either alone), preview how many rows would be
+    archived plus the earliest/latest timestamp, then confirm a
+    destructive dialog. The flow writes every selected export file
+    to the temp dir *first*; only if every write succeeds does the
+    DB `DELETE` run, so a failed export leaves the DB untouched.
+    On success, `share_plus` opens the share sheet so the user
+    lands the archive in Drive / email / wherever before closing
+    the app. Default cutoff is "1 year ago" to protect against
+    accidental recent-history pruning.
+
+### Changed
+
+- **Onboarding copy** — the emergency-contacts step no longer says
+  "later you'll be able to add contacts". Panic + contacts shipped
+  in 0.2.0+11; the step now points the user to
+  `Settings → Emergency contacts`. Home-location step still frames
+  the feature as future because the actual home-location UI is
+  Phase 6.
+
+### Tests
+
+- **`test/archive_service_test.dart`** — 7 tests against
+  `archiveWithHandle` with in-memory SQLite + tempdir: export-then-
+  delete ordering, `StateError` on empty archive (DB untouched,
+  zero files on disk), format selectors (gpxAndCsv / gpxOnly /
+  csvOnly produce the expected extensions), filename encodes
+  cutoff `YYYYMMDD`, strict-`<` cutoff leaves exact-match rows
+  alone.
+- **`test/ping_dao_test.dart`** adds 9 tests covering
+  `countOlderThan` / `olderThan` / `deleteOlderThan`: empty table,
+  strict `<` cutoff, noFix inclusion, ASCENDING export order, row
+  count returned from delete, newer rows untouched.
+- **`test/scheduler_event_test.dart`** — 8 tests: full round-trip
+  of the Kotlin → Dart JSON shape, nullable `note`, tolerant `tsMs`
+  (int and Long-as-double), fallback to `unknown` on missing kind,
+  `SchedulerMode.fromWire` defaults to `workmanager` for null /
+  garbage input.
+
 ## [0.4.0+13] — 2026-04-20
 
 ### Added

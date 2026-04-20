@@ -9,7 +9,7 @@
 - **Routing:** GoRouter with redirect rule (onboarding gate, lock screen)
 - **Storage:** SQLite + SQLCipher (encrypted, Keystore-derived key)
 - **Location:** geolocator + LocationAccuracy.high (battery-conscious)
-- **Background scheduling:** WorkManager (4h periodic cadence)
+- **Background scheduling:** dual-path as of 0.5.0+14 — **Battery saver** (default: WorkManager 4h periodic, battery-aware) or **Precise** (`AlarmManager.setExactAndAllowWhileIdle` per ping, Doze-bypassing, opt-in). User switches via `Settings → Scheduling → Mode`; only one driver active at a time.
 - **Biometric lock:** local_auth (fingerprint/face fallback to PIN)
 - **Native permissions:** permission_handler (staged: fine → background location)
 - **Battery/network telemetry:** battery_plus, connectivity_plus
@@ -55,7 +55,10 @@ lib/
 │   │   └── panic_share_builder.dart    # sms: URI compose + PANIC body format
 │   ├── scheduler/
 │   │   ├── workmanager_scheduler.dart # WorkManager init, periodic/retry/boot/panic task enqueue
-│   │   └── scheduler_policy.dart      # Cadence constants, battery/network constraints
+│   │   ├── scheduler_policy.dart      # Cadence constants, battery/network constraints
+│   │   └── scheduler_mode.dart        # SchedulerMode enum, ExactAlarmBridge MethodChannel wrapper, switchSchedulerMode(). Shipped 0.5.0+14.
+│   ├── archive/
+│   │   └── archive_service.dart # Export-then-delete flow (keeps DB untouched if any export write throws). Shipped 0.5.0+14.
 │   └── export/
 │       ├── gpx_exporter.dart    # GPX serialization
 │       └── csv_exporter.dart    # CSV serialization
@@ -64,7 +67,8 @@ lib/
 │   ├── history_screen.dart      # Paginated full history list
 │   ├── map_screen.dart          # Full-screen map over all pings: time slider, path-line toggle, bbox-fit default viewport. Shipped 0.4.0+13.
 │   ├── regions_screen.dart      # Offline MBTiles library: install (.mbtiles picker), delete, set-active. Shipped 0.4.0+13.
-│   ├── settings_screen.dart     # Diagnostics, permissions, cloud-backup setup, panic duration, app version
+│   ├── archive_screen.dart      # Archive older pings: cutoff picker, format radio, preview, export-and-delete confirm. Shipped 0.5.0+14.
+│   ├── settings_screen.dart     # Diagnostics, scheduling (mode toggle + events log), permissions, cloud-backup setup, panic duration, history (archive), app version
 │   ├── contacts_screen.dart     # Emergency contacts CRUD (stored in encrypted DB)
 │   ├── lock_screen.dart         # Biometric/PIN unlock gate (pre-home)
 │   ├── passphrase_entry_screen.dart # Post-restore backup-passphrase unlock gate
@@ -180,10 +184,12 @@ See `git log --oneline -20` for recent pattern.
 2. **Permission staging order (Android 11+):** requesting background-location before fine-location silently collapses to denied. Always request fine first.
 3. **SQLCipher + tests:** sqflite_sqlcipher does not work in unit test context (platform channel unavailable). Use sqflite_common_ffi for test database. Production uses sqflite_sqlcipher.
 4. **Dark mode only:** no light theme variant. All Color tokens assume `ThemeMode.dark` explicitly.
-5. **Phase scope as of 0.4.0+13:** Phases 1–4 shipped. Exact alarms still land in Phase 5. Panic (Phase 2, shipped 0.2.0+11), quick-settings tile + home widget (Phase 3, shipped 0.3.0+12), offline MBTiles + full map screen (Phase 4, shipped 0.4.0+13), and notifications (`trail_panic` channel) are live. Manifest declared all these permissions upfront so validation passes early.
+5. **Phase scope as of 0.5.0+14:** Phases 1–5 shipped. Panic (Phase 2, shipped 0.2.0+11), quick-settings tile + home widget (Phase 3, shipped 0.3.0+12), offline MBTiles + full map screen (Phase 4, shipped 0.4.0+13), exact alarms + archive flow (Phase 5, shipped 0.5.0+14), and notifications (`trail_panic` channel) are live. Phase 6 (polish: diagnostics screen, DB integrity, date-range export, adaptive icon, heatmap, home location) is the only remaining phase. Manifest declared all permissions upfront so validation passes early.
 6. **`PassphraseNeededException`:** `TrailDatabase.open()` throws this in passphrase-mode-post-restore installs. The UI startup gate (`computeNeedsUnlock` → `needsUnlockProvider`) detects this at `main()` and routes to `/unlock`. Background workers catch and skip silently — they can't write a marker row when the DB is the thing they can't open. Don't handle this exception ad-hoc in new providers; catch at the screen boundary (or rely on the router gate).
 7. **Don't disable `allowBackup` or remove `backup_rules.xml`.** Passphrase-mode users rely on auto-backup for uninstall survivability. If you ever add a new on-disk file that must NOT be backed up, add an `<exclude>` to `backup_rules.xml` + `data_extraction_rules.xml`. MBTiles regions under `<appDocumentsDir>/mbtiles/` are already `<exclude>`d — sideloaded raster packs run 200–600 MB per region and would blow Android's 25 MB per-app Google Drive quota.
-8. **MBTiles tests and the `libsqlite3.so` loader.** `flutter_map_mbtiles` pins `sqflite_common_ffi 2.3.7+1`, which unconditionally calls `DynamicLibrary.open('libsqlite3.so')`. The unversioned symlink is only in `libsqlite3-dev`, missing on CI and fresh arm64 dev images. `test/ping_dao_test.dart` works around this with an `ffiInit` callback passed to `createDatabaseFactoryFfi` — the callback must be a **top-level function** because it's serialized across `Isolate.spawn`, and it registers `open.overrideFor(OperatingSystem.linux, ...)` *inside* the background isolate (the main-isolate override registry doesn't propagate). If you add a new SQLite-backed test, reuse that pattern.
+8. **MBTiles tests and the `libsqlite3.so` loader.** `flutter_map_mbtiles` pins `sqflite_common_ffi 2.3.7+1`, which unconditionally calls `DynamicLibrary.open('libsqlite3.so')`. The unversioned symlink is only in `libsqlite3-dev`, missing on CI and fresh arm64 dev images. `test/ping_dao_test.dart` works around this with an `ffiInit` callback passed to `createDatabaseFactoryFfi` — the callback must be a **top-level function** because it's serialized across `Isolate.spawn`, and it registers `open.overrideFor(OperatingSystem.linux, ...)` *inside* the background isolate (the main-isolate override registry doesn't propagate). If you add a new SQLite-backed test, reuse that pattern (see also `test/archive_service_test.dart` which copies it verbatim).
+9. **Exact-alarm receiver chain self-reschedules.** Unlike WorkManager's `PeriodicWorkRequest`, `setExactAndAllowWhileIdle` fires once and stops. `ExactAlarmReceiver` re-arms the next alarm (+4h) on every delivery *before* enqueuing the one-off `BackgroundWorker` to do the actual ping. If you ever modify that receiver, keep the reschedule call — dropping it silently breaks the whole cadence after one fire. `BootReceiver` checks `SchedulerPrefs.isExactMode(context)` and calls `ExactAlarmScheduler.scheduleNext(context)` on reboot / APK upgrade, so the chain survives cold reboots without the Flutter UI ever running.
+10. **Archive = export-then-delete, never parallel.** `ArchiveService.archive` writes every requested export format to the temp dir first, and only after every `writeAsString` returns does it call `dao.deleteOlderThan(cutoff)`. SQLite transactions can't enlist external files; this sequential ordering is the only safety net. If you add a new export format, extend the "write first" block, not the "delete after" block — a throw between the two is the safe failure mode (user keeps all data, loses only a temp file).
 
 ## Related Docs
 

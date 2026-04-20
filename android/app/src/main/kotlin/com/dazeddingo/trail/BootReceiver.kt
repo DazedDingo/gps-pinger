@@ -45,6 +45,14 @@ class BootReceiver : BroadcastReceiver() {
             ExistingWorkPolicy.KEEP,
             request,
         )
+
+        // Exact-alarm mode doesn't survive reboot — AlarmManager drops all
+        // pending alarms across a power cycle. If the user is in exact
+        // mode, re-arm the next alarm now so the 4h cadence resumes
+        // without them having to open the app.
+        if (SchedulerPrefs.isExactMode(context)) {
+            ExactAlarmScheduler.scheduleNext(context)
+        }
     }
 
     companion object {

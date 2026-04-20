@@ -58,4 +58,38 @@ class PingDao {
     final r = await db.rawQuery('SELECT COUNT(*) AS c FROM pings');
     return (r.first['c'] as int?) ?? 0;
   }
+
+  /// Number of rows with `ts_utc < cutoff` (strict). Used by the
+  /// archive flow to show "about to archive N pings" before the user
+  /// confirms.
+  Future<int> countOlderThan(DateTime cutoffUtc) async {
+    final r = await db.rawQuery(
+      'SELECT COUNT(*) AS c FROM pings WHERE ts_utc < ?',
+      [cutoffUtc.millisecondsSinceEpoch],
+    );
+    return (r.first['c'] as int?) ?? 0;
+  }
+
+  /// Every row with `ts_utc < cutoff`, ASCENDING — same order as
+  /// [all] so exports match historical shape.
+  Future<List<Ping>> olderThan(DateTime cutoffUtc) async {
+    final rows = await db.query(
+      'pings',
+      where: 'ts_utc < ?',
+      whereArgs: [cutoffUtc.millisecondsSinceEpoch],
+      orderBy: 'ts_utc ASC',
+    );
+    return rows.map(Ping.fromMap).toList();
+  }
+
+  /// Deletes every row with `ts_utc < cutoff`. Returns the deleted row
+  /// count so the archive flow can show "archived 421 pings" without
+  /// racing a concurrent writer (transactional delete).
+  Future<int> deleteOlderThan(DateTime cutoffUtc) async {
+    return db.delete(
+      'pings',
+      where: 'ts_utc < ?',
+      whereArgs: [cutoffUtc.millisecondsSinceEpoch],
+    );
+  }
 }

@@ -295,4 +295,87 @@ void main() {
       expect(await dao.count(), 3);
     });
   });
+
+  group('PingDao.countOlderThan', () {
+    test('returns 0 on an empty table', () async {
+      expect(
+        await dao.countOlderThan(DateTime.utc(2026, 1, 1)),
+        0,
+      );
+    });
+
+    test('cutoff is strict (<): rows AT the cutoff are NOT counted', () async {
+      final cutoff = DateTime.utc(2026, 1, 15);
+      await dao.insert(_p(cutoff, lat: 1, lon: 2));
+      await dao.insert(_p(cutoff.subtract(const Duration(seconds: 1)),
+          lat: 1, lon: 2));
+      // The exact-cutoff row must NOT count — otherwise archive-then-delete
+      // would nuke rows the preview said it would leave behind.
+      expect(await dao.countOlderThan(cutoff), 1);
+    });
+
+    test('counts noFix rows too — archive prunes gaps as well', () async {
+      final cutoff = DateTime.utc(2026, 1, 15);
+      await dao.insert(_p(DateTime.utc(2026, 1, 10), lat: 1, lon: 2));
+      await dao.insert(_p(DateTime.utc(2026, 1, 11),
+          source: PingSource.noFix, note: 'denied'));
+      await dao.insert(_p(DateTime.utc(2026, 1, 20), lat: 1, lon: 2));
+      expect(await dao.countOlderThan(cutoff), 2);
+    });
+  });
+
+  group('PingDao.olderThan', () {
+    test('returns rows in ASCENDING order (exports need chronological)',
+        () async {
+      final cutoff = DateTime.utc(2026, 2, 1);
+      await dao.insert(_p(DateTime.utc(2026, 1, 20), lat: 1, lon: 1));
+      await dao.insert(_p(DateTime.utc(2026, 1, 10), lat: 2, lon: 2));
+      await dao.insert(_p(DateTime.utc(2026, 1, 15), lat: 3, lon: 3));
+      await dao.insert(_p(DateTime.utc(2026, 2, 5), lat: 4, lon: 4));
+      final rows = await dao.olderThan(cutoff);
+      expect(rows.map((r) => r.timestampUtc).toList(), [
+        DateTime.utc(2026, 1, 10),
+        DateTime.utc(2026, 1, 15),
+        DateTime.utc(2026, 1, 20),
+      ]);
+    });
+
+    test('empty table → empty list', () async {
+      expect(await dao.olderThan(DateTime.utc(2026, 1, 1)), isEmpty);
+    });
+  });
+
+  group('PingDao.deleteOlderThan', () {
+    test('returns the number of rows deleted', () async {
+      final cutoff = DateTime.utc(2026, 2, 1);
+      await dao.insert(_p(DateTime.utc(2026, 1, 10), lat: 1, lon: 2));
+      await dao.insert(_p(DateTime.utc(2026, 1, 20), lat: 1, lon: 2));
+      await dao.insert(_p(DateTime.utc(2026, 2, 5), lat: 1, lon: 2));
+      final deleted = await dao.deleteOlderThan(cutoff);
+      expect(deleted, 2);
+    });
+
+    test('leaves newer rows untouched', () async {
+      final cutoff = DateTime.utc(2026, 2, 1);
+      await dao.insert(_p(DateTime.utc(2026, 1, 10), lat: 1, lon: 1));
+      await dao.insert(_p(DateTime.utc(2026, 2, 5), lat: 9, lon: 9));
+      await dao.deleteOlderThan(cutoff);
+      final rows = await dao.all();
+      expect(rows, hasLength(1));
+      expect(rows.single.lat, 9);
+      expect(rows.single.timestampUtc, DateTime.utc(2026, 2, 5));
+    });
+
+    test('rows exactly at cutoff survive (strict <)', () async {
+      final cutoff = DateTime.utc(2026, 2, 1);
+      await dao.insert(_p(cutoff, lat: 1, lon: 2));
+      final deleted = await dao.deleteOlderThan(cutoff);
+      expect(deleted, 0);
+      expect(await dao.count(), 1);
+    });
+
+    test('empty table deletes 0 and does not throw', () async {
+      expect(await dao.deleteOlderThan(DateTime.utc(2026, 1, 1)), 0);
+    });
+  });
 }

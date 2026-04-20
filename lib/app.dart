@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'providers/backup_provider.dart';
 import 'providers/onboarding_provider.dart';
+import 'screens/archive_screen.dart';
 import 'screens/contacts_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/history_screen.dart';
@@ -80,6 +81,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/contacts', builder: (_, __) => const ContactsScreen()),
       GoRoute(path: '/map', builder: (_, __) => const MapScreen()),
       GoRoute(path: '/regions', builder: (_, __) => const RegionsScreen()),
+      GoRoute(path: '/archive', builder: (_, __) => const ArchiveScreen()),
     ],
   );
 });
