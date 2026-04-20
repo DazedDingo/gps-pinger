@@ -4,6 +4,21 @@ All notable changes to **Trail** (gps-pinger) are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.6.7+22] — 2026-04-20
+
+### Changed
+
+- **GitHub Releases now carry their CHANGELOG section as the body.**
+  The release workflow previously created each GitHub Release with
+  only a tag + name and no description, so anyone visiting the
+  Releases page saw empty bodies for every version. CI now extracts
+  the `## [vX.Y.Z+N]` section from `CHANGELOG.md` into
+  `release_notes.md` at build time (via a literal-prefix `awk` pass —
+  the `+` in version strings breaks naive regex matching) and passes
+  it to `softprops/action-gh-release` as `body_path`. Bodies for
+  already-published 0.6.2+17 through 0.6.6+21 releases were backfilled
+  manually via `gh release edit`.
+
 ## [0.6.6+21] — 2026-04-20
 
 ### Fixed

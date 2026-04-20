@@ -75,8 +75,35 @@ jobs:
         id: version
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f1)
+          BUILD=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build=$BUILD" >> $GITHUB_OUTPUT
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
           echo "name=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Extract CHANGELOG section for this release
+        id: changelog
+        # Pull the section between `## [vX.Y.Z+N]` and the next `## ` header
+        # so GitHub Releases show the Added/Changed/Fixed notes instead of
+        # an empty body. If no matching section is found we fall back to a
+        # "see CHANGELOG.md" placeholder rather than failing the build —
+        # a missing note shouldn't block an APK ship.
+        run: |
+          VERSION_PATTERN="${{ steps.version.outputs.version }}+${{ steps.version.outputs.build }}"
+          # `index()` + literal-prefix compare avoids the `+` in version
+          # strings being interpreted as a regex quantifier.
+          awk -v prefix="## [$VERSION_PATTERN]" '
+            index($0, prefix) == 1 {found=1; next}
+            found && /^## \[/ {exit}
+            found {print}
+          ' CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "No CHANGELOG entry for $VERSION_PATTERN — falling back to placeholder." >&2
+            echo "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for release notes." > release_notes.md
+          fi
+          echo "---- release notes body ----"
+          cat release_notes.md
+          echo "---- end ----"
 
       - name: Rename APK
         run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/Trail-${{ steps.version.outputs.tag }}.apk
@@ -86,5 +113,6 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.name }}
+          body_path: release_notes.md
           files: build/app/outputs/flutter-apk/Trail-${{ steps.version.outputs.tag }}.apk
           fail_on_unmatched_files: true
