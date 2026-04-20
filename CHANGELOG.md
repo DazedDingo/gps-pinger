@@ -4,6 +4,31 @@ All notable changes to **Trail** (gps-pinger) are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.6.3+18] — 2026-04-20
+
+### Fixed
+
+- **Panic button fill no longer spills past the button edges.** The
+  `Positioned.fill` overlay stretched to the parent `Stack`'s bounds
+  while the `OutlinedButton` inside the Stack was intrinsic-width —
+  so on release the red fill visibly extended past the button's sides
+  on both edges. Wrapped the Stack in a fixed-height `SizedBox`,
+  switched the Stack to `StackFit.expand`, matched the button's shape
+  to a `RoundedRectangleBorder(8)`, and clipped the overlay with a
+  matching `ClipRRect` so the fill can't escape the corners. The label
+  also now uses `FittedBox(BoxFit.scaleDown)` as a last-resort guard
+  against exotic font-scaling overflow.
+- **Auto-send toggle reconciles with the live SMS grant.** Users who
+  enabled auto-send on 0.6.1+16 (before the toggle-time prompt existed)
+  upgraded to 0.6.2+17 with the toggle persisted ON but the underlying
+  `SEND_SMS` permission never granted — panic-time fell through to the
+  compose-intent fallback, same visible symptom as the 0.6.1 bug. The
+  `PanicAutoSendNotifier.build()` method now checks `Permission.sms.
+  status` after reading the persisted flag; if the flag says `on` but
+  the permission isn't granted (upgrade case, or user revoked via
+  system settings post-grant), it flips the stored flag to `false`.
+  Next toggle-on re-prompts cleanly.
+
 ## [0.6.2+17] — 2026-04-20
 
 ### Fixed

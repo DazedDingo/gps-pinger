@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../services/panic/panic_service.dart';
 
@@ -78,14 +79,41 @@ class PanicAutoSendNotifier extends AsyncNotifier<bool> {
 
   @override
   Future<bool> build() async {
+    bool persisted;
     try {
       final raw = await _storage.read(key: _autoSendKey);
-      return raw == 'true';
+      persisted = raw == 'true';
     } catch (_) {
       // Transient secure-storage read failure — default to the safer off
       // state rather than risk a silent-send on a flaky boot.
       return false;
     }
+    if (!persisted) return false;
+    // Reconcile with the live SEND_SMS grant. Two cases where the
+    // persisted flag can be `true` without the permission:
+    //   1. 0.6.1+16 upgrade — the toggle persisted before the toggle-
+    //      time prompt existed, so the grant was never actually asked.
+    //   2. User revoked SEND_SMS in system settings after granting it.
+    // Either way, returning `true` here would send the next panic down
+    // the auto-send path which falls back to compose-intent when the
+    // runtime check fails — and the user would see the manual flow
+    // without knowing the toggle was effectively broken. Flip it off
+    // automatically so the next toggle-on re-prompts cleanly.
+    try {
+      final status = await Permission.sms.status;
+      if (!status.isGranted) {
+        try {
+          await _storage.write(key: _autoSendKey, value: 'false');
+        } catch (_) {
+          // Best-effort clear; fall through to returning false anyway.
+        }
+        return false;
+      }
+    } catch (_) {
+      // permission_handler plugin unavailable (test context). Don't
+      // second-guess the persisted value there.
+    }
+    return true;
   }
 
   Future<void> set(bool enabled) async {

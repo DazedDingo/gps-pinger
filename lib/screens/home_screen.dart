@@ -485,67 +485,82 @@ class _PanicButtonState extends ConsumerState<_PanicButton>
               onLongPressStart: (_) => _startHold(),
               onLongPressEnd: (_) => _cancelHold(),
               onLongPressCancel: _cancelHold,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  OutlinedButton(
-                    // Tap does nothing — the long-press gesture above is
-                    // the only arming path. Button exists for visual
-                    // affordance + to provide the disabled/working state.
-                    // Plain OutlinedButton (not .icon) so the label never
-                    // ellipsises on narrow screens — the red outline +
-                    // progress fill are the affordance, no icon needed.
-                    onPressed: _working ? null : () {},
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: scheme.error,
-                      side: BorderSide(color: scheme.error, width: 1.5),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      textStyle: Theme.of(context)
-                          .textTheme
-                          .labelLarge
-                          ?.copyWith(letterSpacing: 1.4),
+              // Fixed height + explicit full-width makes the Stack and the
+              // button share identical bounds — previously the OutlinedButton
+              // was intrinsic-width while the Positioned.fill overlay
+              // stretched to the Stack's (Column.stretch) full width, so the
+              // red fill visibly spilled past the button's sides on release.
+              child: SizedBox(
+                height: 52,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    OutlinedButton(
+                      // Tap does nothing — the long-press gesture above is
+                      // the only arming path. Button exists for visual
+                      // affordance + to provide the disabled/working state.
+                      onPressed: _working ? null : () {},
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: scheme.error,
+                        side: BorderSide(color: scheme.error, width: 1.5),
+                        // Border radius must match the fill overlay below
+                        // so the animated fill clips cleanly against the
+                        // button's corners.
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(8)),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        textStyle: Theme.of(context)
+                            .textTheme
+                            .labelLarge
+                            ?.copyWith(letterSpacing: 1.4),
+                      ),
+                      child: _working
+                          ? const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2),
+                                ),
+                                SizedBox(width: 8),
+                                Text('LOGGING…'),
+                              ],
+                            )
+                          : const FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text('HOLD TO PANIC'),
+                            ),
                     ),
-                    child: _working
-                        ? const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2),
-                              ),
-                              SizedBox(width: 8),
-                              Text('LOGGING…'),
-                            ],
-                          )
-                        : const Text('HOLD TO PANIC'),
-                  ),
-                  // Fill-progress overlay during hold. AnimatedBuilder on
-                  // the controller's value so the fraction tracks the
-                  // hold duration; ignored when idle.
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: AnimatedBuilder(
-                        animation: _hold,
-                        builder: (_, __) {
-                          if (_hold.value == 0) return const SizedBox.shrink();
-                          return FractionallySizedBox(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: _hold.value,
-                            child: Container(
-                              decoration: BoxDecoration(
+                    // Fill-progress overlay during hold. Wrapped in a
+                    // ClipRRect matching the button's shape so the fill
+                    // can't escape the rounded corners.
+                    IgnorePointer(
+                      child: ClipRRect(
+                        borderRadius:
+                            const BorderRadius.all(Radius.circular(8)),
+                        child: AnimatedBuilder(
+                          animation: _hold,
+                          builder: (_, __) {
+                            if (_hold.value == 0) {
+                              return const SizedBox.shrink();
+                            }
+                            return FractionallySizedBox(
+                              alignment: Alignment.centerLeft,
+                              widthFactor: _hold.value,
+                              child: Container(
                                 color:
                                     scheme.error.withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.circular(8),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 8),
