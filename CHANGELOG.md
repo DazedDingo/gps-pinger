@@ -4,6 +4,22 @@ All notable changes to **Trail** (gps-pinger) are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.6.4+19] — 2026-04-20
+
+### Fixed
+
+- **5-second undo popup no longer needs manual dismissal.** The auto-
+  send flow used `SnackBar.closed` as its timing mechanism — which is
+  fine until Flutter's accessibility path kicks in: under TalkBack,
+  Switch Access, or any service that sets `accessibleNavigation`, the
+  framework pins SnackBars open until the user dismisses them, which
+  silently blocked the send. Replaced the closed-future dependency
+  with an independent `Timer` that fires the send after 5 seconds
+  regardless of SnackBar state; UNDO cancels the timer directly,
+  swipe-away still resolves as "send." The SnackBar is hidden
+  explicitly once the resolution lands so there's no stale countdown
+  lingering after the SMS goes out.
+
 ## [0.6.3+18] — 2026-04-20
 
 ### Fixed

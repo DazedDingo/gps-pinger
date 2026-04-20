@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -386,15 +388,27 @@ class _PanicButtonState extends ConsumerState<_PanicButton>
     }
   }
 
-  /// Auto-send path: show a 5-second undo SnackBar. If the user taps
-  /// Undo, cancel the pending send. If the SnackBar times out or is
-  /// dismissed any other way, fire the native SMS. Falls back to the
-  /// compose-intent path if the native send returns 0.
+  /// Auto-send path: show a 5-second undo SnackBar AND start an
+  /// independent send timer. Flutter's SnackBar duration is advisory —
+  /// under accessibility services (TalkBack, Switch Access, Select-to-
+  /// Speak) the framework pins the SnackBar open until the user
+  /// manually dismisses it, which would previously block the send
+  /// indefinitely because we keyed the fire on `controller.closed`.
+  /// The timer fires regardless; UNDO cancels it directly.
   Future<void> _shareWithUndoGrace({
     required List<EmergencyContact> contacts,
     required Ping ping,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
+    final completer = Completer<bool>();
+    Timer? sendTimer;
+
+    void resolve(bool send) {
+      if (completer.isCompleted) return;
+      sendTimer?.cancel();
+      completer.complete(send);
+    }
+
     final controller = messenger.showSnackBar(
       SnackBar(
         duration: _autoSendGrace,
@@ -405,13 +419,20 @@ class _PanicButtonState extends ConsumerState<_PanicButton>
         ),
         action: SnackBarAction(
           label: 'UNDO',
-          onPressed: () {/* closed reason = action */},
+          onPressed: () => resolve(false),
         ),
       ),
     );
-    final reason = await controller.closed;
+    sendTimer = Timer(_autoSendGrace, () => resolve(true));
+    // Still honour manual dismissal: a swipe-away mid-countdown resolves
+    // as "send" (user saw the warning, didn't undo); UNDO already
+    // resolved above before the SnackBar actually closes.
+    unawaited(controller.closed.then((_) => resolve(true)));
+
+    final shouldSend = await completer.future;
     if (!mounted) return;
-    if (reason == SnackBarClosedReason.action) {
+    messenger.hideCurrentSnackBar();
+    if (!shouldSend) {
       messenger.showSnackBar(
         const SnackBar(content: Text('SMS cancelled. Panic still logged.')),
       );
