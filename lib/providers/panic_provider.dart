@@ -20,14 +20,20 @@ class PanicDurationNotifier extends AsyncNotifier<PanicDuration> {
 
   @override
   Future<PanicDuration> build() async {
+    PanicDuration resolved;
     try {
       final raw = await _storage.read(key: _durationKey);
-      return _parse(raw) ?? PanicDuration.min30;
+      resolved = _parse(raw) ?? PanicDuration.min30;
     } catch (_) {
       // Secure storage is flaky in test environments — fall back to the
       // default rather than breaking the UI on a transient read error.
-      return PanicDuration.min30;
+      resolved = PanicDuration.min30;
     }
+    // Ensure the native SharedPreferences mirror matches on every app
+    // start, in case the user changed duration on one phone and restored
+    // onto another before the first Settings-screen interaction.
+    await PanicService.syncDurationToNative(resolved);
+    return resolved;
   }
 
   Future<void> set(PanicDuration d) async {
@@ -38,6 +44,10 @@ class PanicDurationNotifier extends AsyncNotifier<PanicDuration> {
       // Write failure is non-fatal — the in-memory state is still correct
       // and the user can retry on next panic. No point crashing here.
     }
+    // Mirror to native SharedPreferences so the Phase 3 quick-settings
+    // tile + home-screen widget start the FG service with the same
+    // duration the Settings screen displays.
+    await PanicService.syncDurationToNative(d);
   }
 
   PanicDuration? _parse(String? raw) {

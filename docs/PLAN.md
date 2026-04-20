@@ -202,8 +202,13 @@ Panic button on home + dedicated panic foreground service + continuous mode with
 - Duration preference persists in `flutter_secure_storage` under `trail_panic_duration_v1`, defaulting to 30 min.
 - SMS hand-off uses `url_launcher` on an `sms:` URI with comma-joined recipients. No `SEND_SMS` permission ever requested — user taps Send in their own SMS app.
 
-### Phase 3 — Quick-settings tile + home-screen widget
+### Phase 3 — Quick-settings tile + home-screen widget ✅ (shipped 0.3.0+12)
 Native Kotlin quick-settings tile service and home-screen widget, both triggering panic via same foreground-service entry point. **Demo:** add widget, swipe down for tile, one-tap panic without opening the app.
+
+**Implementation notes:**
+- Risk #7 resolved: tile and widget both kick `PanicForegroundService.start()` directly (native → FG service → WorkManager → Flutter dispatcher). No native DB write, no marker file. The FG service is the single ignition path shared with the in-app panic button.
+- Duration mirror lives in a native `SharedPreferences` file written by the Flutter-side `panicDurationProvider` on every change + on every provider build. Flutter secure storage stays the source of truth; the mirror exists because the tile/widget can't touch Keystore.
+- Widget is 2×1 resizeable, tile is standard QS size. Both display the configured duration ("30 min") on their face so the user can see what a tap will start.
 
 ### Phase 4 — Offline map
 Raster MBTiles. Regions screen (install / delete `.mbtiles` via file picker). Map screen with pins, time slider, path-line toggle, bbox-fit default viewport. Document tile build pipeline in `docs/TILES.md`. **Demo:** install UK `.mbtiles`, open map with a month of pings plotted.
@@ -222,7 +227,7 @@ Diagnostics screen (permission matrix, Doze state, last 20 worker runs), DB inte
 4. **Keystore key loss on backup restore** could brick DB. Mitigation: `allowBackup="false"`; also detect open failure and offer "reset DB" with warning.
 5. **SQLCipher + WorkManager isolate**: background isolate must re-init plugin registry and re-open encrypted DB. Verify early in Phase 1.
 6. **Panic foreground service Android 14+** — `foregroundServiceType="location"` now also needs `FOREGROUND_SERVICE_LOCATION` runtime permission. Handle in permission flow.
-7. **Quick-settings tile + widget talking to Flutter isolate** — safest pattern is fire Android Intent to a foreground service in native Kotlin, which writes a `panic` ping directly via platform channel to Flutter isolate OR writes directly to the SQLCipher DB through a native binding. Decide this when Phase 3 starts; easiest MVP is native Kotlin writes a marker file, Flutter picks it up on next launch — but that breaks real-time panic. Revisit.
+7. ~~**Quick-settings tile + widget talking to Flutter isolate**~~ — **resolved 0.3.0+12.** Tile service and widget provider both kick `PanicForegroundService.start(context, durationMinutes)` directly. The FG service's tick loop enqueues WorkManager tasks that re-enter the Flutter dispatcher via `BackgroundWorker`; `_handlePanic` in `workmanager_scheduler.dart` writes the row via the existing DAO. Single ignition pipeline, shared with the in-app panic button. No marker files, no native SQLCipher access. Duration mirror lives in a plain SharedPreferences file (`trail_panic_prefs`) so the tile/widget can read it without touching Keystore.
 8. **Tile file size** — UK-wide raster MBTiles can be 200–600MB. Mitigation: regions screen lets user delete unused regions; don't bundle default tiles in APK.
 9. **Cell tower / Wi-Fi SSID capture** — stock Android 12+ requires `ACCESS_FINE_LOCATION` + dedicated `NEARBY_WIFI_DEVICES` for Wi-Fi scan. Treat as optional field — if denied, just skip and log the rest.
 
@@ -251,4 +256,4 @@ Diagnostics screen (permission matrix, Doze state, last 20 worker runs), DB inte
 
 - Accent colour / exact palette for dark theme — pick during Phase 1 scaffold
 - Should onboarding "home location" step let user pick on a mini-map, or just store GPS at time of setup? Decide when building onboarding
-- Quick-tile / widget → Flutter isolate IPC strategy — decide when Phase 3 starts (see risk #7)
+- ~~Quick-tile / widget → Flutter isolate IPC strategy~~ — resolved 0.3.0+12: shared FG-service ignition path (see risk #7).

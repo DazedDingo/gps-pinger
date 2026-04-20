@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AppWidgetProviderInfo for the Phase 3 panic widget.
+
+  - 2x1 cell sizing keeps the widget small enough to live in a crowded
+    home screen but large enough to be a low-miss target during a panic.
+  - updatePeriodMillis=0 — we refresh on-demand (via onUpdate after an
+    AppWidgetManager.updateAppWidget call from the provider); no polling.
+  - resizeMode=horizontal|vertical lets the user stretch it.
+  - previewImage points at the launcher icon as a lightweight stand-in
+    until a dedicated preview asset ships in Phase 6 polish.
+  -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="110dp"
+    android:minHeight="40dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/panic_widget"
+    android:previewImage="@mipmap/ic_launcher"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"/>

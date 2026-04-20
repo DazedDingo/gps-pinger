@@ -41,6 +41,20 @@ object PanicMethodChannel {
                         result.error("PANIC_STOP_FAILED", t.message, null)
                     }
                 }
+                "setContinuousDurationMinutes" -> {
+                    // Mirrors the user's chosen duration into a native-readable
+                    // SharedPreferences file so the Phase 3 tile + widget can
+                    // start the FG service with the same duration the Settings
+                    // screen shows — without re-implementing secure storage
+                    // access in Kotlin.
+                    try {
+                        val mins = (call.argument<Int>("minutes") ?: 30)
+                        PanicPrefs.setDurationMinutes(context, mins)
+                        result.success(null)
+                    } catch (t: Throwable) {
+                        result.error("PANIC_PREF_FAILED", t.message, null)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }

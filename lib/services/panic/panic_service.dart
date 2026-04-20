@@ -99,6 +99,24 @@ class PanicService {
     }
   }
 
+  /// Mirror the user's chosen continuous-panic duration to a native
+  /// SharedPreferences file so the Phase 3 quick-tile and home widget can
+  /// read it. Non-fatal on failure — the Flutter-side secure-storage copy
+  /// is still authoritative for in-app panic.
+  static Future<void> syncDurationToNative(PanicDuration d) async {
+    try {
+      await _channel.invokeMethod(
+        'setContinuousDurationMinutes',
+        {'minutes': d.value.inMinutes},
+      );
+    } on MissingPluginException {
+      // Test context — nothing to mirror to.
+    } on PlatformException {
+      // Native write failed; tile/widget will fall back to the 30-min
+      // default which is safe.
+    }
+  }
+
   /// Stop an in-progress continuous-panic session. Idempotent.
   static Future<void> stopContinuous() async {
     try {

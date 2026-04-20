@@ -94,6 +94,37 @@
             android:foregroundServiceType="location"
             android:exported="false"/>
 
+        <!-- Quick-settings tile (Phase 3). `exported=true` is required —
+             the system launcher needs to bind. `BIND_QUICK_SETTINGS_TILE`
+             locks binding to the system so a malicious app can't abuse
+             it. Icon reuses the launcher mono-drawable; a dedicated
+             mono-icon lands in Phase 6 polish. -->
+        <service
+            android:name=".PanicTileService"
+            android:icon="@android:drawable/ic_menu_mylocation"
+            android:label="Panic"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
+            </intent-filter>
+        </service>
+
+        <!-- Home-screen widget (Phase 3). `exported=true` again required
+             so the launcher can bind. Same panic ignition path as the
+             QS tile → PanicForegroundService.start(). -->
+        <receiver
+            android:name=".PanicWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+                <action android:name="com.dazeddingo.trail.WIDGET_PANIC"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/panic_widget_info"/>
+        </receiver>
+
         <!-- Boot marker: enqueues a one-off WorkManager task that logs a
              `boot` row and triggers an immediate GPS fix. -->
         <receiver

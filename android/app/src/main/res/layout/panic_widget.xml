@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Minimum-viable home-screen panic widget. One large tappable button with
+  a "Panic" label and a subtitle showing the configured duration. The
+  widget ignition path is identical to the quick-settings tile:
+    tap → PanicWidgetProvider.onReceive → PanicForegroundService.start
+  -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/panic_widget_button"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/panic_widget_bg"
+    android:gravity="center"
+    android:padding="12dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="PANIC"
+        android:textColor="#FFFFFF"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:includeFontPadding="false"/>
+
+    <TextView
+        android:id="@+id/panic_widget_subtitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="30 min"
+        android:textColor="#FFFFFF"
+        android:textSize="12sp"
+        android:alpha="0.9"
+        android:includeFontPadding="false"/>
+</LinearLayout>

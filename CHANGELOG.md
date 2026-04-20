@@ -4,6 +4,48 @@ All notable changes to **Trail** (gps-pinger) are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.3.0+12] — 2026-04-20
+
+### Added
+
+- **Phase 3: Quick-settings tile + home-screen widget.** Both trigger
+  continuous-panic without opening the app, using the same ignition
+  path as the home-screen panic button — native entry →
+  `PanicForegroundService.start()` → WorkManager ticks → Flutter
+  dispatcher writes a `panic` row. One pipeline, three entry points.
+
+  - **Quick-settings tile** (`PanicTileService`). Register once via
+    Android Quick Settings Edit pane; tap to start the FG service for
+    the user's configured duration. Tile subtitle shows the current
+    duration (e.g. "30 min") so users can see what they're about to
+    start. `BIND_QUICK_SETTINGS_TILE` permission locks binding to the
+    system.
+  - **Home-screen widget** (`PanicWidgetProvider`, 2×1 resizeable).
+    Tap to fire the same FG-service path. Widget face shows "PANIC" +
+    a subtitle with the duration so it stays glanceable. No running
+    indicator on the widget itself — the FG notification already owns
+    that surface.
+  - **Duration mirror**: the user's chosen 15/30/60-min preference is
+    now mirrored from Flutter secure storage into a native
+    `SharedPreferences` file (`trail_panic_prefs`) via a new
+    `setContinuousDurationMinutes` MethodChannel method. Both the
+    tile and widget read that mirror on click, so they honour the
+    Settings-screen choice without ever touching Keystore-backed
+    storage. Mirror is re-synced on every `panicDurationProvider`
+    build and every `set()`, so it can never drift stale.
+
+### Changed
+
+- `AndroidManifest.xml` registers
+  `<service android:name=".PanicTileService" …/>` with the
+  `android.service.quicksettings.action.QS_TILE` intent-filter and
+  `<receiver android:name=".PanicWidgetProvider" …/>` with the
+  `APPWIDGET_UPDATE` + `WIDGET_PANIC` actions plus the
+  `@xml/panic_widget_info` metadata.
+- New resources: `res/layout/panic_widget.xml`,
+  `res/drawable/panic_widget_bg.xml`,
+  `res/xml/panic_widget_info.xml`.
+
 ## [0.2.0+11] — 2026-04-20
 
 ### Added

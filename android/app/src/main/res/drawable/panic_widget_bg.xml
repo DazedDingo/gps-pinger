@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Rounded red pill for the panic widget. Plain solid colour + 12dp
+  corners to match the rest of the app's theme without needing a full
+  vector asset.
+  -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#B3261E"/>
+    <corners android:radius="16dp"/>
+</shape>
