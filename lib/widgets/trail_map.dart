@@ -1,61 +1,220 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../models/ping.dart';
 
-/// A tiny, offline, tile-free "map" of the user's ping trail.
+/// Interactive map of the user's recent ping trail.
 ///
-/// The design constraint ruled out online map tiles (Trail is offline-first,
-/// no internet dependency). So the visualisation is a pure `CustomPaint`:
-/// coordinates are normalised to the screen-rect bounding box and rendered
-/// as a connected path with dots at each fix.
+/// Uses `flutter_map` with OpenStreetMap raster tiles over HTTPS. The
+/// logging pipeline itself is fully offline — only this viewer widget
+/// needs the network, and flutter_map handles missing tiles gracefully
+/// (blank grid, polyline + markers still render on top).
 ///
-/// What it gives up vs a real map (no basemap, no street context) it buys
-/// back in being honest about Trail's data model — you see the shape of
-/// the route and can spot long gaps, which is the point of a heartbeat log.
-class TrailMap extends StatelessWidget {
+/// Phase 4 (see `docs/PLAN.md`) still plans to swap the OSM TileLayer for
+/// a sideloaded MBTiles source so the viewer goes fully offline too; this
+/// is the "usable map today" intermediate step.
+class TrailMap extends StatefulWidget {
   final List<Ping> pings;
   final double height;
 
   const TrailMap({
     super.key,
     required this.pings,
-    this.height = 180,
+    this.height = 260,
   });
 
   @override
+  State<TrailMap> createState() => _TrailMapState();
+}
+
+class _TrailMapState extends State<TrailMap> {
+  final _controller = MapController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant TrailMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // When a new ping lands, recenter on the latest fix so the user's
+    // current position stays on-screen across the 4h cadence.
+    final oldFixes = _fixesOf(oldWidget.pings);
+    final newFixes = _fixesOf(widget.pings);
+    if (newFixes.isEmpty) return;
+    final newestChanged = oldFixes.isEmpty ||
+        oldFixes.first.timestampUtc != newFixes.first.timestampUtc;
+    if (newestChanged) {
+      _fitToPings(newFixes);
+    }
+  }
+
+  static List<Ping> _fixesOf(List<Ping> pings) => pings
+      .where((p) => p.lat != null && p.lon != null)
+      .toList(growable: false);
+
+  void _fitToPings(List<Ping> fixes) {
+    if (fixes.isEmpty) return;
+    if (fixes.length == 1) {
+      _controller.move(LatLng(fixes.first.lat!, fixes.first.lon!), 14);
+      return;
+    }
+    final bounds = LatLngBounds.fromPoints(
+      fixes.map((p) => LatLng(p.lat!, p.lon!)).toList(),
+    );
+    _controller.fitCamera(
+      CameraFit.bounds(
+        bounds: bounds,
+        padding: const EdgeInsets.all(32),
+        maxZoom: 15,
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final fixes = pings
-        .where((p) => p.lat != null && p.lon != null)
-        .toList(growable: false);
+    final fixes = _fixesOf(widget.pings);
     final scheme = Theme.of(context).colorScheme;
 
-    if (fixes.length < 2) {
-      return Container(
-        height: height,
-        alignment: Alignment.center,
-        decoration: _frame(scheme),
-        child: Text(
-          fixes.isEmpty
-              ? 'No fixes yet — trail will appear after a few pings.'
-              : 'Only one fix — trail needs at least two points.',
-          style: Theme.of(context).textTheme.bodySmall,
-          textAlign: TextAlign.center,
-        ),
+    if (fixes.isEmpty) {
+      return _PlaceholderFrame(
+        height: widget.height,
+        scheme: scheme,
+        message: 'No fixes yet — trail will appear after a few pings.',
       );
     }
 
+    final points =
+        fixes.map((p) => LatLng(p.lat!, p.lon!)).toList(growable: false);
+    final latest = points.first;
+
     return Container(
-      height: height,
+      height: widget.height,
       decoration: _frame(scheme),
       clipBehavior: Clip.antiAlias,
-      child: CustomPaint(
-        painter: _TrailPainter(
-          fixes: fixes,
-          lineColor: scheme.primary,
-          dotColor: scheme.primary,
-          latestColor: scheme.tertiary,
-        ),
-        child: const SizedBox.expand(),
+      child: Stack(
+        children: [
+          FlutterMap(
+            mapController: _controller,
+            options: MapOptions(
+              initialCenter: latest,
+              initialZoom: 14,
+              minZoom: 2,
+              maxZoom: 18,
+              // Bound the camera so users can't pan off into the void on
+              // a fresh install where only one fix exists yet.
+              cameraConstraint: const CameraConstraint.unconstrained(),
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.pinchZoom |
+                    InteractiveFlag.drag |
+                    InteractiveFlag.doubleTapZoom |
+                    InteractiveFlag.flingAnimation |
+                    InteractiveFlag.scrollWheelZoom,
+              ),
+            ),
+            children: [
+              TileLayer(
+                urlTemplate:
+                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.dazeddingo.trail',
+                maxZoom: 19,
+                // No retina flag — OSM's standard tiles are 256 px and
+                // doubling the request rate would risk tripping their
+                // fair-use policy for a tiny personal-safety app.
+              ),
+              if (points.length >= 2)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: points,
+                      strokeWidth: 3,
+                      color: scheme.primary.withValues(alpha: 0.85),
+                    ),
+                  ],
+                ),
+              MarkerLayer(
+                markers: [
+                  for (int i = 1; i < points.length; i++)
+                    Marker(
+                      point: points[i],
+                      width: 12,
+                      height: 12,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: scheme.primary,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.85),
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  // Latest fix — larger, tertiary colour so it pops
+                  // against the rest of the trail.
+                  Marker(
+                    point: latest,
+                    width: 22,
+                    height: 22,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: scheme.tertiary,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.95),
+                          width: 2.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          // OSM requires attribution on the map surface itself. Keep it
+          // unobtrusive but legible — a white pill in the corner.
+          Positioned(
+            left: 6,
+            bottom: 6,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                '© OpenStreetMap',
+                style: TextStyle(color: Colors.white, fontSize: 10),
+              ),
+            ),
+          ),
+          // Recenter/refit button — cheap affordance since panning can
+          // get the user lost on a small viewport.
+          Positioned(
+            right: 6,
+            top: 6,
+            child: Material(
+              color: Colors.black.withValues(alpha: 0.55),
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () => _fitToPings(fixes),
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(
+                    Icons.center_focus_strong,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -70,97 +229,38 @@ class TrailMap extends StatelessWidget {
       );
 }
 
-class _TrailPainter extends CustomPainter {
-  final List<Ping> fixes;
-  final Color lineColor;
-  final Color dotColor;
-  final Color latestColor;
+class _PlaceholderFrame extends StatelessWidget {
+  final double height;
+  final ColorScheme scheme;
+  final String message;
 
-  _TrailPainter({
-    required this.fixes,
-    required this.lineColor,
-    required this.dotColor,
-    required this.latestColor,
+  const _PlaceholderFrame({
+    required this.height,
+    required this.scheme,
+    required this.message,
   });
 
   @override
-  void paint(Canvas canvas, Size size) {
-    // Bounding box of the trail. An eighth-of-a-box margin keeps edge
-    // points off the stroke and prevents a one-point-wide trail from
-    // collapsing into a single pixel line.
-    double minLat = fixes.first.lat!;
-    double maxLat = minLat;
-    double minLon = fixes.first.lon!;
-    double maxLon = minLon;
-    for (final p in fixes) {
-      if (p.lat! < minLat) minLat = p.lat!;
-      if (p.lat! > maxLat) maxLat = p.lat!;
-      if (p.lon! < minLon) minLon = p.lon!;
-      if (p.lon! > maxLon) maxLon = p.lon!;
-    }
-    final latSpan = (maxLat - minLat).abs();
-    final lonSpan = (maxLon - minLon).abs();
-    // Pad degenerate (all-at-one-location) cases so the dot renders
-    // centered instead of NaN'ing the projection.
-    final latRange = latSpan < 1e-6 ? 1e-6 : latSpan;
-    final lonRange = lonSpan < 1e-6 ? 1e-6 : lonSpan;
-
-    const pad = 12.0;
-    final plotW = size.width - pad * 2;
-    final plotH = size.height - pad * 2;
-
-    Offset project(double lat, double lon) {
-      // Flip latitude so higher values render toward the top of the canvas
-      // (standard map orientation; canvas y grows downward).
-      final nx = (lon - minLon) / lonRange;
-      final ny = 1.0 - (lat - minLat) / latRange;
-      return Offset(pad + nx * plotW, pad + ny * plotH);
-    }
-
-    final points = fixes.map((p) => project(p.lat!, p.lon!)).toList();
-
-    final pathPaint = Paint()
-      ..color = lineColor.withValues(alpha: 0.65)
-      ..strokeWidth = 2
-      ..strokeJoin = StrokeJoin.round
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-
-    final path = Path()..moveTo(points.first.dx, points.first.dy);
-    for (int i = 1; i < points.length; i++) {
-      path.lineTo(points[i].dx, points[i].dy);
-    }
-    canvas.drawPath(path, pathPaint);
-
-    final dotPaint = Paint()..color = dotColor.withValues(alpha: 0.85);
-    for (int i = 0; i < points.length; i++) {
-      canvas.drawCircle(points[i], 2.5, dotPaint);
-    }
-
-    // Latest fix gets a larger accent marker so it's obvious where the
-    // user currently is relative to the rest of the trail.
-    // `fixes` is DESC by timestamp (matching recentPingsProvider), so the
-    // newest fix is at index 0.
-    canvas.drawCircle(
-      points.first,
-      6,
-      Paint()..color = latestColor,
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: scheme.outlineVariant,
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          message,
+          style: Theme.of(context).textTheme.bodySmall,
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
-    canvas.drawCircle(
-      points.first,
-      6,
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.9)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _TrailPainter oldDelegate) {
-    if (oldDelegate.fixes.length != fixes.length) return true;
-    if (oldDelegate.fixes.isEmpty) return false;
-    // Compare the newest fix only — good enough for the 4h cadence.
-    return oldDelegate.fixes.first.timestampUtc != fixes.first.timestampUtc;
   }
 }

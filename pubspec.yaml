@@ -1,7 +1,7 @@
 name: trail
 description: "Trail — personal-safety GPS logger. Offline, encrypted, 4h-cadence background pings."
 publish_to: 'none'
-version: 0.1.8+9
+version: 0.1.9+10
 
 environment:
   sdk: ^3.5.0
@@ -49,6 +49,13 @@ dependencies:
   # flutter_local_notifications lands in Phase 2 with the panic-receipt
   # notification. Not imported yet — adding it now would pull in timezone
   # and desugaring deps we don't need for the MVP build.
+
+  # Map viewer — interactive pan/zoom trail visualisation on the home
+  # screen. Uses OpenStreetMap raster tiles (HTTPS); the logging pipeline
+  # itself stays fully offline. Phase 4's offline MBTiles plan still
+  # stands (docs/PLAN.md) — this is the intermediate "usable map" step.
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
 
   # Utilities
   intl: ^0.19.0

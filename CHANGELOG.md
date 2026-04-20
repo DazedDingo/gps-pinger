@@ -4,6 +4,34 @@ All notable changes to **Trail** (gps-pinger) are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.1.9+10] — 2026-04-20
+
+### Added
+
+- **Interactive map viewer on the home screen.** The home-screen
+  `TrailMap` widget is now a real `flutter_map` view with pinch-zoom,
+  pan, double-tap-zoom, fling, and scroll-wheel-zoom gestures; tiles
+  are OpenStreetMap raster over HTTPS. Polyline + dot markers render
+  on top of the basemap, the latest fix gets an accent marker in the
+  theme's tertiary colour, and a corner recenter button fits the
+  camera back to the trail bounds after the user pans away. A new
+  frame auto-refits whenever a newer fix arrives so the current
+  position stays on-screen across the 4h cadence.
+
+### Changed
+
+- `android.permission.INTERNET` is now declared in
+  `AndroidManifest.xml` — required for the map viewer's tile
+  requests. The logging pipeline itself (GPS, SQLCipher write, export)
+  still has zero network dependencies; only the history visualisation
+  reads tiles. Offline devices still log and export fine — the map
+  surface just shows a blank grid with the polyline + markers drawn
+  on top.
+- `docs/PLAN.md` Phase 4 (offline MBTiles) is still planned — this is
+  an intermediate "usable map today" step, not a replacement for the
+  sideloaded raster tiles design. When Phase 4 lands, swapping the
+  `TileLayer` source is a one-line change.
+
 ## [0.1.8+9] — 2026-04-20
 
 ### Fixed

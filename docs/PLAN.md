@@ -80,6 +80,7 @@ Battery conservation is an explicit design constraint. The app must be invisible
 - **Initial region:** **UK only**; additional regions installable ad hoc
 - **Default viewport:** fit bounding box of all pings in the currently selected time range
 - **Paths:** pins only by default; line overlay available behind a toggle (at 4h intervals lines misrepresent actual travel)
+- **Interim (shipped 0.1.9+10):** the home screen already runs `flutter_map` against OpenStreetMap's online raster tiles so users get an interactive, basemapped view today. Phase 4 swaps the `TileLayer` source for the MBTiles provider — the polyline/marker layers and gestures stay untouched.
 
 ### Reliability surfacing
 - Home screen shows "last successful ping" timestamp prominently
