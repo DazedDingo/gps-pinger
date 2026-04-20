@@ -488,25 +488,38 @@ class _PanicButtonState extends ConsumerState<_PanicButton>
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  OutlinedButton.icon(
+                  OutlinedButton(
                     // Tap does nothing — the long-press gesture above is
                     // the only arming path. Button exists for visual
                     // affordance + to provide the disabled/working state.
+                    // Plain OutlinedButton (not .icon) so the label never
+                    // ellipsises on narrow screens — the red outline +
+                    // progress fill are the affordance, no icon needed.
                     onPressed: _working ? null : () {},
                     style: OutlinedButton.styleFrom(
                       foregroundColor: scheme.error,
                       side: BorderSide(color: scheme.error, width: 1.5),
                       padding: const EdgeInsets.symmetric(vertical: 14),
+                      textStyle: Theme.of(context)
+                          .textTheme
+                          .labelLarge
+                          ?.copyWith(letterSpacing: 1.4),
                     ),
-                    icon: _working
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child:
-                                CircularProgressIndicator(strokeWidth: 2),
+                    child: _working
+                        ? const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2),
+                              ),
+                              SizedBox(width: 8),
+                              Text('LOGGING…'),
+                            ],
                           )
-                        : const Icon(Icons.warning_amber_rounded),
-                    label: Text(_working ? 'Logging…' : 'Hold to panic'),
+                        : const Text('HOLD TO PANIC'),
                   ),
                   // Fill-progress overlay during hold. AnimatedBuilder on
                   // the controller's value so the fraction tracks the

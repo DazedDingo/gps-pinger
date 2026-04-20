@@ -85,11 +85,10 @@ class PanicService {
   /// Silently send the panic SMS via native [SmsManager] — no user tap
   /// required. Gated behind the `panicAutoSendProvider` toggle and always
   /// called *after* the 5-second on-screen undo grace window elapses, so
-  /// an accidental panic tap can still be rescued. Requires `SEND_SMS`
-  /// permission; requests it at the call site if not already granted.
+  /// an accidental panic tap can still be rescued.
   ///
   /// Returns the number of recipients the native side reported as sent.
-  /// Returns `0` on any failure (missing permission, no plugin, native
+  /// Returns `0` on any failure (permission revoked, no plugin, native
   /// error) — callers should fall back to [openPanicSms] so the user can
   /// still ship the alert manually.
   static Future<int> autoSendSms({
@@ -97,10 +96,11 @@ class PanicService {
     required Ping ping,
   }) async {
     if (contacts.isEmpty) return 0;
-    // Runtime permission — SEND_SMS is a dangerous permission, so even
-    // with the manifest declaration the user sees a system prompt the
-    // first time.
-    final status = await Permission.sms.request();
+    // Check-only (no prompt). The toggle in Settings requests the grant
+    // up-front; if we reach here denied, the user revoked it from system
+    // settings and we fall back to the compose-intent path rather than
+    // popping a dangerous-permission dialog mid-panic.
+    final status = await Permission.sms.status;
     if (!status.isGranted) return 0;
     final body = PanicShareBuilder.composeBody(ping: ping);
     final recipients = contacts

@@ -526,6 +526,12 @@ class _HomeLocationTile extends ConsumerWidget {
 /// Toggle for silent panic-SMS sending (0.6.1+16). When off, the panic
 /// button opens the user's SMS app pre-filled; when on, the SMS is sent
 /// natively via `SmsManager` after a 5-second on-screen undo grace.
+///
+/// The runtime `SEND_SMS` prompt fires at toggle-on time — not at panic
+/// time. If the user denied an earlier prompt, hitting panic would
+/// otherwise silently fall through to the compose-intent path and leave
+/// the user thinking auto-send was broken. Requesting up-front means the
+/// toggle only commits to `on` when the permission is actually granted.
 class _AutoSendToggleTile extends ConsumerWidget {
   const _AutoSendToggleTile();
 
@@ -538,13 +544,44 @@ class _AutoSendToggleTile extends ConsumerWidget {
       title: const Text('Auto-send panic SMS'),
       subtitle: const Text(
         'Send the SMS automatically after a 5-second undo window. '
-        'Requires SEND_SMS permission. Off = opens your SMS app to confirm.',
+        'Requires SEND_SMS permission (asked when you enable this). '
+        'Off = opens your SMS app to confirm.',
       ),
       value: enabled,
       onChanged: state.isLoading
           ? null
-          : (v) => ref.read(panicAutoSendProvider.notifier).set(v),
+          : (v) => _onToggle(context, ref, v),
     );
+  }
+
+  Future<void> _onToggle(BuildContext context, WidgetRef ref, bool v) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (v) {
+      final status = await Permission.sms.request();
+      if (!status.isGranted) {
+        // Don't persist — the toggle would look on but silently fall
+        // back to compose-intent, which is the very bug this flow is
+        // fixing. Surface the denial so the user knows to retry.
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              status.isPermanentlyDenied
+                  ? 'SMS permission blocked. Enable it in App settings to '
+                      'turn on auto-send.'
+                  : 'SMS permission denied. Toggle again to retry.',
+            ),
+            action: status.isPermanentlyDenied
+                ? SnackBarAction(
+                    label: 'SETTINGS',
+                    onPressed: openAppSettings,
+                  )
+                : null,
+          ),
+        );
+        return;
+      }
+    }
+    await ref.read(panicAutoSendProvider.notifier).set(v);
   }
 }
 

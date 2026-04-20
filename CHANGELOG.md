@@ -4,6 +4,29 @@ All notable changes to **Trail** (gps-pinger) are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.6.2+17] — 2026-04-20
+
+### Fixed
+
+- **Auto-send now actually auto-sends.** Before, flipping the toggle in
+  Settings persisted the preference but never requested `SEND_SMS` —
+  the request was deferred to panic-fire time, where a pre-existing
+  denial returned immediately and silently fell through to the
+  compose-intent path. Users saw the SMS app pop up with the body
+  populated and nothing sent, which is exactly the manual flow the
+  toggle was supposed to skip. The toggle now requests `SEND_SMS`
+  up-front and only commits to `on` when the grant comes back — a
+  denial shows a SnackBar (with a "Settings" action if permanently
+  denied) and leaves the toggle off. Panic-time uses `.status` only,
+  so there's no system dialog in the middle of an emergency.
+- **"Hold to panic" label overflow.** The previous label rode inside
+  `OutlinedButton.icon` next to a warning icon; on narrow screens the
+  text ellipsised to "Hold to p…". Switched to plain `OutlinedButton`
+  with an all-caps "HOLD TO PANIC" label (letter-spacing 1.4). The red
+  outline and progress fill are already the affordance — no icon is
+  needed. The `_working` state shows a compact `CircularProgressIndicator`
+  + "LOGGING…" row instead of icon+label.
+
 ## [0.6.1+16] — 2026-04-20
 
 ### Added
