@@ -210,8 +210,8 @@ Native Kotlin quick-settings tile service and home-screen widget, both triggerin
 - Duration mirror lives in a native `SharedPreferences` file written by the Flutter-side `panicDurationProvider` on every change + on every provider build. Flutter secure storage stays the source of truth; the mirror exists because the tile/widget can't touch Keystore.
 - Widget is 2×1 resizeable, tile is standard QS size. Both display the configured duration ("30 min") on their face so the user can see what a tap will start.
 
-### Phase 4 — Offline map
-Raster MBTiles. Regions screen (install / delete `.mbtiles` via file picker). Map screen with pins, time slider, path-line toggle, bbox-fit default viewport. Document tile build pipeline in `docs/TILES.md`. **Demo:** install UK `.mbtiles`, open map with a month of pings plotted.
+### Phase 4 — Offline map — **shipped 0.4.0+13 (2026-04-20)**
+Raster MBTiles. Regions screen (install / delete `.mbtiles` via file picker, set-active toggle, stale-file auto-clear). Full map screen with pins, time slider (visible/total count, HH:mm display), path-line toggle, bbox-fit default viewport. Home-screen trail and the full map both read the active region from `SharedPreferences` (`trail_active_mbtiles_v1`), falling back to online OSM when no region is set. MBTiles files live under `<appDocumentsDir>/mbtiles/` and are `<exclude>`'d from Android auto-backup (200–600 MB UK raster builds would blow the 25 MB per-app Google Drive quota). Tile build pipeline documented in `docs/TILES.md`. **Demo:** install UK `.mbtiles`, open map with a month of pings plotted.
 
 ### Phase 5 — Scheduling hardening + archive
 Add `AlarmManager.setExactAndAllowWhileIdle` path behind MethodChannel (`SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM`). Settings exposes WorkManager vs exact-alarm mode + last N scheduling events. Archive flow (export-and-delete older than X). **Demo:** toggle scheduler modes, compare punctuality over a week; archive a year of pings out to file and confirm DB shrunk.

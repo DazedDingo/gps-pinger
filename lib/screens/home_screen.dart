@@ -9,6 +9,7 @@ import '../db/database.dart';
 import '../db/ping_dao.dart';
 import '../models/ping.dart';
 import '../providers/contacts_provider.dart';
+import '../providers/mbtiles_provider.dart';
 import '../providers/panic_provider.dart';
 import '../providers/pings_provider.dart';
 import '../services/export/csv_exporter.dart';
@@ -32,6 +33,7 @@ class HomeScreen extends ConsumerWidget {
     final healthy = ref.watch(heartbeatHealthyProvider);
     final count = ref.watch(pingCountProvider);
     final recent = ref.watch(recentPingsProvider);
+    final activeRegion = ref.watch(activeRegionProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -72,13 +74,26 @@ class HomeScreen extends ConsumerWidget {
             const SizedBox(height: 12),
             _ExportRow(),
             const SizedBox(height: 20),
-            Text(
-              'Trail',
-              style: Theme.of(context).textTheme.titleMedium,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Trail',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                TextButton.icon(
+                  onPressed: () => context.push('/map'),
+                  icon: const Icon(Icons.open_in_full, size: 16),
+                  label: const Text('Full map'),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             recent.when(
-              data: (pings) => TrailMap(pings: pings),
+              data: (pings) => TrailMap(
+                pings: pings,
+                activeRegion: activeRegion.valueOrNull,
+              ),
               loading: () => const SizedBox(
                 height: 180,
                 child: Center(child: CircularProgressIndicator()),

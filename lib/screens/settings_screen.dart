@@ -193,6 +193,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           ),
           const _ContinuousDurationTile(),
           const Divider(),
+          const _SectionHeader('Offline map'),
+          ListTile(
+            leading: const Icon(Icons.map_outlined),
+            title: const Text('Regions'),
+            subtitle: const Text(
+              'Install sideloaded .mbtiles for an offline viewer. '
+              'See docs/TILES.md for build pipeline.',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/regions'),
+          ),
+          const Divider(),
           const _SectionHeader('Cloud backup'),
           _BackupTile(onChanged: () => ref.invalidate(backupEnabledProvider)),
           const Divider(),

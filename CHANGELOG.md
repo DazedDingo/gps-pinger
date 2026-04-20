@@ -4,6 +4,75 @@ All notable changes to **Trail** (gps-pinger) are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.4.0+13] — 2026-04-20
+
+### Added
+
+- **Phase 4: offline MBTiles regions + full-screen map.** The map
+  viewer now reads from sideloaded raster `.mbtiles` packages when the
+  user has a region installed and active, and falls back to online
+  OpenStreetMap tiles when it doesn't. The logging pipeline has been
+  offline since Phase 1; this closes the loop so the *viewer* can be
+  offline too.
+
+  - **Regions library** (`Settings → Offline map`). Install a
+    `.mbtiles` via the Android SAF picker — Trail copies it into
+    `<appDocumentsDir>/mbtiles/` so sideloads survive the SAF URI
+    going stale. Per-region tiles show filename + size. Popup menu
+    actions: Set as active · Clear active · Delete. Deleting the
+    active region clears the active pref so the viewer doesn't point
+    at a missing file.
+  - **Active region state** is persisted in `SharedPreferences`
+    (`trail_active_mbtiles_v1`) rather than the encrypted DB — this
+    is a UX preference, not sensitive data, and it needs to be
+    readable from every isolate without a DB plumb. `getActive()`
+    verifies the file still exists on disk; if it's gone (user
+    deleted from a file manager, OS upgrade nuked it), the pref is
+    auto-cleared and the viewer silently reverts to online OSM.
+  - **Full-screen map** (`/map`, opened via the "Full map" button in
+    the home-screen header). Renders all historical pings at once
+    (new `allPingsProvider`), fits the bounding box on first load,
+    and offers a time slider that limits the visible window to the N
+    earliest pings with the HH:mm of the last visible ping shown
+    next to the slider. Path-line toggle uses the same warning text
+    as the home-screen trail — 4-hour intervals *don't* mean the
+    user walked a straight line, so pins-only is the default.
+  - **Tile pipeline** — `docs/TILES.md` now documents the one-time
+    PC-side flow: Geofabrik extract → `tilemaker` →
+    rasterise → `adb push` → install via regions screen. UK-wide
+    raster MBTiles land around 200–600 MB.
+
+### Changed
+
+- **Backup rules** (`res/xml/backup_rules.xml` +
+  `data_extraction_rules.xml`) now `<exclude domain="file"
+  path="mbtiles/"/>` so multi-hundred-megabyte tile packages don't
+  count against Android's 25 MB per-app Google Drive quota. The
+  encrypted DB and the PBKDF2 salt file are still included — the
+  user can re-sideload regions after uninstall/restore, but they
+  can't re-derive the key without the passphrase.
+- `pubspec.yaml` pulls in `flutter_map_mbtiles 1.0.4`,
+  `file_picker 11.0.2`, and `shared_preferences 2.5.5`.
+- `flutter_map_mbtiles`'s transitive pins forced
+  `sqflite_common_ffi` down from 2.4.0+2 to 2.3.7+1, which calls
+  `DynamicLibrary.open('libsqlite3.so')`. The unversioned symlink
+  lives in `libsqlite3-dev` (not installed on CI / fresh dev
+  images), so `test/ping_dao_test.dart` now passes an `ffiInit`
+  callback via `createDatabaseFactoryFfi` that registers
+  `open.overrideFor(...)` *inside* the ffi background isolate —
+  the main-isolate registry doesn't propagate across
+  `Isolate.spawn`. Ladder tries `.so.0` at the usual
+  `/lib/{arch}-linux-gnu/` locations.
+
+### Tests
+
+- **`test/mbtiles_service_test.dart`** — 14 tests against a
+  temp-dir-backed fake `PathProviderPlatform`:
+  `listInstalled` empty-case + non-mbtiles-skip + alphabetic-sort,
+  `install` copy + overwrite + missing-source throw, active-region
+  round-trip + stale-file auto-clear, `delete` removes-file +
+  clears-active-when-active + leaves-other-active + idempotent.
+
 ## [0.3.0+12] — 2026-04-20
 
 ### Added

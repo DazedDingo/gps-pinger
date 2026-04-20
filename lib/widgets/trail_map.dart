@@ -1,27 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_mbtiles/flutter_map_mbtiles.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/ping.dart';
+import '../services/mbtiles_service.dart';
 
 /// Interactive map of the user's recent ping trail.
 ///
-/// Uses `flutter_map` with OpenStreetMap raster tiles over HTTPS. The
-/// logging pipeline itself is fully offline — only this viewer widget
-/// needs the network, and flutter_map handles missing tiles gracefully
-/// (blank grid, polyline + markers still render on top).
-///
-/// Phase 4 (see `docs/PLAN.md`) still plans to swap the OSM TileLayer for
-/// a sideloaded MBTiles source so the viewer goes fully offline too; this
-/// is the "usable map today" intermediate step.
+/// Uses `flutter_map`. Tile source prefers an active MBTiles region
+/// (set in the Regions screen) and falls back to OpenStreetMap raster
+/// tiles when no region is installed. Passing `activeRegion: null` at
+/// the callsite keeps the widget usable in tests without spinning up a
+/// real file.
 class TrailMap extends StatefulWidget {
   final List<Ping> pings;
   final double height;
+  final MBTilesRegion? activeRegion;
 
   const TrailMap({
     super.key,
     required this.pings,
     this.height = 260,
+    this.activeRegion,
   });
 
   @override
@@ -116,15 +117,23 @@ class _TrailMapState extends State<TrailMap> {
               ),
             ),
             children: [
-              TileLayer(
-                urlTemplate:
-                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.dazeddingo.trail',
-                maxZoom: 19,
-                // No retina flag — OSM's standard tiles are 256 px and
-                // doubling the request rate would risk tripping their
-                // fair-use policy for a tiny personal-safety app.
-              ),
+              if (widget.activeRegion != null)
+                TileLayer(
+                  tileProvider: MbTilesTileProvider.fromPath(
+                    path: widget.activeRegion!.path,
+                  ),
+                  maxZoom: 18,
+                )
+              else
+                TileLayer(
+                  urlTemplate:
+                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.dazeddingo.trail',
+                  maxZoom: 19,
+                  // No retina flag — OSM's standard tiles are 256 px and
+                  // doubling the request rate would risk tripping their
+                  // fair-use policy for a tiny personal-safety app.
+                ),
               if (points.length >= 2)
                 PolylineLayer(
                   polylines: [
@@ -186,9 +195,11 @@ class _TrailMapState extends State<TrailMap> {
                 color: Colors.black.withValues(alpha: 0.55),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: const Text(
-                '© OpenStreetMap',
-                style: TextStyle(color: Colors.white, fontSize: 10),
+              child: Text(
+                widget.activeRegion != null
+                    ? 'Offline: ${widget.activeRegion!.name}'
+                    : '© OpenStreetMap',
+                style: const TextStyle(color: Colors.white, fontSize: 10),
               ),
             ),
           ),

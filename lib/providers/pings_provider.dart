@@ -18,6 +18,15 @@ final recentPingsProvider = FutureProvider<List<Ping>>((ref) async {
   return PingDao(db).recent();
 });
 
+/// Full chronological (oldest-first) history. Used by the Phase 4 full
+/// map screen where the time slider sweeps forward through the day — no
+/// pagination, the entire `pings` table is loaded into memory once
+/// because raster tiles are the byte-heavy thing, not 100-byte rows.
+final allPingsProvider = FutureProvider<List<Ping>>((ref) async {
+  final db = await TrailDatabase.shared();
+  return PingDao(db).all();
+});
+
 /// Last successful fix (null-coord rows excluded). Feeds the home-screen
 /// "last successful ping" card.
 final lastSuccessfulPingProvider = FutureProvider<Ping?>((ref) async {

@@ -1,15 +1,51 @@
+import 'dart:ffi';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqlite3/open.dart';
 import 'package:trail/db/ping_dao.dart';
 import 'package:trail/models/ping.dart';
+
+/// Isolate-side sqlite3 loader. Must be a TOP-LEVEL function so it can be
+/// sent across the `Isolate.spawn` boundary inside `sqflite_common_ffi`'s
+/// FFI factory (a closure would fail to serialize). Registers the linker
+/// override inside the background isolate, since `open.overrideFor`
+/// registrations in the main isolate do NOT propagate.
+///
+/// Pinned to `.so.0` because `sqflite_common_ffi 2.3.7+1` (forced by
+/// `flutter_map_mbtiles`' transitive pins) calls `DynamicLibrary.open(
+/// 'libsqlite3.so')` — the unversioned symlink only exists in
+/// `libsqlite3-dev`, which isn't installed on CI workers or fresh dev
+/// images. The `.so.0` versioned file IS on every Debian/Ubuntu system.
+void _ffiInit() {
+  if (Platform.isLinux) {
+    open.overrideFor(OperatingSystem.linux, () {
+      for (final candidate in const [
+        'libsqlite3.so.0',
+        '/lib/aarch64-linux-gnu/libsqlite3.so.0',
+        '/lib/x86_64-linux-gnu/libsqlite3.so.0',
+        '/usr/lib/aarch64-linux-gnu/libsqlite3.so.0',
+        '/usr/lib/x86_64-linux-gnu/libsqlite3.so.0',
+      ]) {
+        try {
+          return DynamicLibrary.open(candidate);
+        } on ArgumentError {
+          // Try next candidate.
+        }
+      }
+      return DynamicLibrary.open('libsqlite3.so');
+    });
+  }
+}
 
 /// In-memory sqflite-ffi harness. Schema mirrors production exactly (see
 /// [TrailDatabase._onCreate]) — keep them in lock-step when bumping the
 /// schema version.
 Future<Database> _openMemDb() async {
   sqfliteFfiInit();
-  databaseFactory = databaseFactoryFfi;
-  final db = await openDatabase(inMemoryDatabasePath);
+  databaseFactory = createDatabaseFactoryFfi(ffiInit: _ffiInit);
+  final db = await databaseFactory.openDatabase(inMemoryDatabasePath);
   await db.execute('''
     CREATE TABLE pings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

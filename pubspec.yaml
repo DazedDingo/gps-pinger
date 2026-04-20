@@ -1,7 +1,7 @@
 name: trail
 description: "Trail — personal-safety GPS logger. Offline, encrypted, 4h-cadence background pings."
 publish_to: 'none'
-version: 0.3.0+12
+version: 0.4.0+13
 
 environment:
   sdk: ^3.5.0
@@ -66,6 +66,16 @@ dependencies:
   intl: ^0.19.0
   package_info_plus: ^9.0.1
 
+  # Phase 4 offline-map: swap flutter_map's online OSM TileLayer for a
+  # sideloaded MBTiles raster file. flutter_map_mbtiles opens the
+  # `.mbtiles` SQLite package lazily and feeds tiles into the same
+  # TileLayer the online path uses. file_picker lets the user install a
+  # region by picking a `.mbtiles` from storage; we copy it into the
+  # app's documents dir so it survives uninstall-restore flows.
+  flutter_map_mbtiles: ^1.0.4
+  file_picker: ^11.0.2
+  shared_preferences: ^2.5.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -74,6 +84,18 @@ dev_dependencies:
   # against a real (in-memory) SQLite without SQLCipher's platform channel.
   # Production still uses sqflite_sqlcipher for the encrypted on-device DB.
   sqflite_common_ffi: ^2.3.3
+  # Transitive test deps we reference explicitly so `flutter analyze`
+  # stays quiet about `depend_on_referenced_packages`:
+  # - sqlite3: `ping_dao_test.dart` registers an `open.overrideFor`
+  #   callback to load the versioned `libsqlite3.so.0` inside the ffi
+  #   isolate (arm64 dev boxes and CI workers lack the unversioned
+  #   symlink that ships in libsqlite3-dev).
+  # - path_provider_platform_interface + plugin_platform_interface:
+  #   `mbtiles_service_test.dart` installs a fake platform provider so
+  #   `getApplicationDocumentsDirectory()` points at a tempdir.
+  sqlite3: ^2.4.3
+  path_provider_platform_interface: ^2.1.2
+  plugin_platform_interface: ^2.1.8
 
 flutter:
   uses-material-design: true

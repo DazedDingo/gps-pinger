@@ -14,10 +14,12 @@
 - **Native permissions:** permission_handler (staged: fine → background location)
 - **Battery/network telemetry:** battery_plus, connectivity_plus
 - **Export:** GPX + CSV exporters (share_plus)
-- **Map viewer:** flutter_map + OpenStreetMap raster tiles (online).
-  Logging pipeline is fully offline; only the viewer needs network.
-  Phase 4 will swap the TileLayer source for sideloaded MBTiles to go
-  fully offline (see `docs/PLAN.md`).
+- **Map viewer:** flutter_map + OpenStreetMap raster tiles when no
+  active region is set; `flutter_map_mbtiles` + sideloaded `.mbtiles`
+  when the user has installed and activated a region via
+  `Settings → Offline map → Regions`. The logging pipeline has been
+  fully offline since Phase 1 — as of 0.4.0+13 the viewer is offline
+  too whenever a region is active.
 - **Android-only** (no iOS variant planned)
 
 ## Directory Map: `lib/`
@@ -59,7 +61,9 @@ lib/
 │       └── csv_exporter.dart    # CSV serialization
 ├── screens/                     # Screens (all ConsumerWidget)
 │   ├── home_screen.dart         # Panic button + last ping + heartbeat + trail viz + export + recent history
-│   ├── history_screen.dart      # Paginated full history, optional map view (Phase 4)
+│   ├── history_screen.dart      # Paginated full history list
+│   ├── map_screen.dart          # Full-screen map over all pings: time slider, path-line toggle, bbox-fit default viewport. Shipped 0.4.0+13.
+│   ├── regions_screen.dart      # Offline MBTiles library: install (.mbtiles picker), delete, set-active. Shipped 0.4.0+13.
 │   ├── settings_screen.dart     # Diagnostics, permissions, cloud-backup setup, panic duration, app version
 │   ├── contacts_screen.dart     # Emergency contacts CRUD (stored in encrypted DB)
 │   ├── lock_screen.dart         # Biometric/PIN unlock gate (pre-home)
@@ -176,9 +180,10 @@ See `git log --oneline -20` for recent pattern.
 2. **Permission staging order (Android 11+):** requesting background-location before fine-location silently collapses to denied. Always request fine first.
 3. **SQLCipher + tests:** sqflite_sqlcipher does not work in unit test context (platform channel unavailable). Use sqflite_common_ffi for test database. Production uses sqflite_sqlcipher.
 4. **Dark mode only:** no light theme variant. All Color tokens assume `ThemeMode.dark` explicitly.
-5. **Phase 1 scope:** exact alarms still land in Phase 5. Panic (Phase 2, shipped 0.2.0+11) and notifications (`trail_panic` channel) are live. Manifest declared all these permissions upfront so validation passes early. Map rendering shipped early (0.1.9+10) via `flutter_map` + OSM online tiles; Phase 4's offline MBTiles plan still stands — swap the TileLayer source when those land.
+5. **Phase scope as of 0.4.0+13:** Phases 1–4 shipped. Exact alarms still land in Phase 5. Panic (Phase 2, shipped 0.2.0+11), quick-settings tile + home widget (Phase 3, shipped 0.3.0+12), offline MBTiles + full map screen (Phase 4, shipped 0.4.0+13), and notifications (`trail_panic` channel) are live. Manifest declared all these permissions upfront so validation passes early.
 6. **`PassphraseNeededException`:** `TrailDatabase.open()` throws this in passphrase-mode-post-restore installs. The UI startup gate (`computeNeedsUnlock` → `needsUnlockProvider`) detects this at `main()` and routes to `/unlock`. Background workers catch and skip silently — they can't write a marker row when the DB is the thing they can't open. Don't handle this exception ad-hoc in new providers; catch at the screen boundary (or rely on the router gate).
-7. **Don't disable `allowBackup` or remove `backup_rules.xml`.** Passphrase-mode users rely on auto-backup for uninstall survivability. If you ever add a new on-disk file that must NOT be backed up, add an `<exclude>` to `backup_rules.xml` + `data_extraction_rules.xml`.
+7. **Don't disable `allowBackup` or remove `backup_rules.xml`.** Passphrase-mode users rely on auto-backup for uninstall survivability. If you ever add a new on-disk file that must NOT be backed up, add an `<exclude>` to `backup_rules.xml` + `data_extraction_rules.xml`. MBTiles regions under `<appDocumentsDir>/mbtiles/` are already `<exclude>`d — sideloaded raster packs run 200–600 MB per region and would blow Android's 25 MB per-app Google Drive quota.
+8. **MBTiles tests and the `libsqlite3.so` loader.** `flutter_map_mbtiles` pins `sqflite_common_ffi 2.3.7+1`, which unconditionally calls `DynamicLibrary.open('libsqlite3.so')`. The unversioned symlink is only in `libsqlite3-dev`, missing on CI and fresh arm64 dev images. `test/ping_dao_test.dart` works around this with an `ffiInit` callback passed to `createDatabaseFactoryFfi` — the callback must be a **top-level function** because it's serialized across `Isolate.spawn`, and it registers `open.overrideFor(OperatingSystem.linux, ...)` *inside* the background isolate (the main-isolate override registry doesn't propagate). If you add a new SQLite-backed test, reuse that pattern.
 
 ## Related Docs
 

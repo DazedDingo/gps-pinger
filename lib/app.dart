@@ -7,7 +7,9 @@ import 'providers/onboarding_provider.dart';
 import 'screens/contacts_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/history_screen.dart';
+import 'screens/map_screen.dart';
 import 'screens/passphrase_entry_screen.dart';
+import 'screens/regions_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/lock_screen.dart';
 import 'screens/onboarding/onboarding_flow.dart';
@@ -76,6 +78,8 @@ final _routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/history', builder: (_, __) => const HistoryScreen()),
       GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
       GoRoute(path: '/contacts', builder: (_, __) => const ContactsScreen()),
+      GoRoute(path: '/map', builder: (_, __) => const MapScreen()),
+      GoRoute(path: '/regions', builder: (_, __) => const RegionsScreen()),
     ],
   );
 });
