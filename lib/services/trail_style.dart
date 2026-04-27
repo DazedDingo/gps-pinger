@@ -14,13 +14,22 @@ class TrailStyle {
   /// Returns the style JSON string with the active region's file path
   /// substituted in. Returns `null` when no region is active — caller
   /// must render a placeholder instead of mounting `MapLibreMap`.
-  ///
-  /// The PMTiles URL form is `pmtiles://<absolute-fs-path>` — the
-  /// triple-slash arises naturally because Android documents-dir paths
-  /// already begin with `/`.
   static Future<String?> loadForRegion(String? activeRegionPath) async {
     if (activeRegionPath == null) return null;
     final raw = await rootBundle.loadString(_styleAsset);
-    return raw.replaceAll(_placeholder, 'pmtiles://$activeRegionPath');
+    return substituteRegionPath(raw, activeRegionPath);
   }
+
+  /// Performs the placeholder substitution without touching the asset
+  /// bundle — split out so unit tests can pin the exact URL format
+  /// without spinning up a `WidgetTester`.
+  ///
+  /// The PMTiles URL form on Android is `pmtiles://file://<abs-path>`
+  /// per the MapLibre Native Android 11.7+ docs — the bare
+  /// `pmtiles://<abs-path>` form does *not* resolve on Android and
+  /// silently renders as a tile-less white background. The conventional
+  /// triple-slash arises because Android documents-dir paths begin with
+  /// `/`, so `file://` + `/data/...` becomes `file:///data/...`.
+  static String substituteRegionPath(String rawStyleJson, String activeRegionPath) =>
+      rawStyleJson.replaceAll(_placeholder, 'pmtiles://file://$activeRegionPath');
 }

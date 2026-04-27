@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.8.0+30] — 2026-04-27
+
+### Fixed
+- **PMTiles map renders white on Android.** 0.8.0+29 built the source URL as `pmtiles://<path>`, but MapLibre Native Android requires `pmtiles://file://<path>` for local files — the bare form silently fails and the map shows only the OSM Liberty cream-white background. Added a regression test pinning the URL format so this can't recur.
+
 ## [0.8.0+29] — 2026-04-27
 
 Same payload as the (mis-numbered) 0.7.2+28 build — relabelled as a
