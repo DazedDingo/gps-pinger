@@ -4,7 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
-## [0.7.2+28] — 2026-04-27
+## [0.8.0+29] — 2026-04-27
+
+Same payload as the (mis-numbered) 0.7.2+28 build — relabelled as a
+minor bump because the renderer swap is too big to live under a patch
+version, and old `.mbtiles` files are unreadable by the new code.
 
 ### Changed
 - **Map renderer cutover: vector PMTiles via MapLibre** (Phase 7). The home-screen trail preview and the full-screen history map now render vector tiles from sideloaded `.pmtiles` files, replacing the previous raster `.mbtiles` path. Vector tiles are 5–10× smaller for the same coverage and produce smoother labels and lines at all zooms. The Regions screen file picker now accepts `.pmtiles`; the storage directory moved from `<docs>/mbtiles/` to `<docs>/tiles/`. The active-region preference key was reset deliberately — old `.mbtiles` files can't be read by the new renderer, so the active selection clears on first launch and you reinstall the region.

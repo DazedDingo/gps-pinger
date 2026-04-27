@@ -8,7 +8,7 @@ set it as active. The viewer renders a placeholder until a region is
 active; the app is offline-only and there is no online tile fallback.
 
 This doc is the one-time build pipeline — nothing here runs on the
-phone. Switched from raster MBTiles to vector PMTiles in 0.7.2+28; if
+phone. Switched from raster MBTiles to vector PMTiles in 0.8.0+29; if
 you have an old `.mbtiles` file lying around it won't load any more.
 
 ## Why vector
