@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.7.1+26] — 2026-04-27
+
+### Changed
+- GitHub repository renamed from `DazedDingo/gps-pinger` to `DazedDingo/trail` to match the app and local directory. The old URL still redirects, so existing clones and Release downloads keep working.
+
 ## [0.7.1+25] — 2026-04-27
 
 ### Changed
