@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.7.2+27] — 2026-04-27
+
+### Added
+- **MapLibre + PMTiles foundation** (Phase 7, in progress). The `maplibre` package and a bundled OSM Liberty style — style JSON + sprites + Roboto glyph PBFs, ~1.2 MB total — are now in the build, ahead of the widget swap. App still uses `flutter_map` + raster MBTiles for now; the renderer cutover lands in the next release.
+
 ## [0.7.1+26] — 2026-04-27
 
 ### Changed
