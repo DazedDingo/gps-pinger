@@ -1,4 +1,4 @@
-# Trail (gps-pinger)
+# Trail
 
 Personal-safety + curious-data-gathering Android app. Pings GPS every 4 hours, logs locally to an encrypted SQLite DB, supports on-demand panic ping, exports GPX/CSV. Fully offline — no internet dependency at runtime.
 

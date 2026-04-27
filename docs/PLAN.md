@@ -11,7 +11,7 @@ A personal-safety + curious-data-gathering app that runs constantly on an Androi
 
 - **App display name:** `Trail`
 - **Android `applicationId`:** `com.dazeddingo.trail` (proposed — stable, reverse-DNS, Play-ready if ever published)
-- **Repo / working title:** `gps-pinger` (repo name stays — low-churn)
+- **Repo / working title:** `trail` (local dir aligned with app display name 2026-04-27; GitHub repo rename pending)
 - **Icon style:** neutral / disguised (generic compass or map pin, blends in with default system apps — intentionally not branded)
 - **Theme:** dark mode default (user preference across all their apps)
 
@@ -107,7 +107,7 @@ Full walkthrough:
 ## Repo
 
 - GitHub: `https://github.com/DazedDingo/gps-pinger` (public)
-- Local path: `/home/ubuntu/projects/gps-pinger`
+- Local path: `/home/ubuntu/projects/trail`
 - Stack: Flutter (Dart ^3.11), Riverpod, go_router — matches `watchnext` / `groceries-app`
 
 ## Directory / file structure

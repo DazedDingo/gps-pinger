@@ -1,8 +1,13 @@
 # Changelog
 
-All notable changes to **Trail** (gps-pinger) are recorded here. Format follows
+All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
+
+## [0.7.1+25] — 2026-04-27
+
+### Changed
+- Project naming consistency: README, CHANGELOG header, and PLAN now refer to the project as **Trail** rather than the historical `gps-pinger` working title. Local working directory renamed to `trail/`. App behaviour, package id, and signing identity are unchanged.
 
 ## [0.7.1+24] — 2026-04-20
 
