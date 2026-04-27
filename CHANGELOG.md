@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.8.0+39] — 2026-04-27
+
+### Changed
+- Pin the maplibre-native Android SDK to `13.0.3-pre0` (the only version newer than the broken-locally `13.0.2`) via a gradle resolution-strategy override on top of `maplibre_gl 0.26.0`'s default `13.0.+`. Last roll of the dice on a native fix before falling through to the in-app localhost HTTP-server workaround.
+
 ## [0.8.0+38] — 2026-04-27
 
 ### Changed

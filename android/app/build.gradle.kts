@@ -66,6 +66,22 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.2")
 }
 
+// Pin the maplibre-native Android SDK to the latest pre-release on top
+// of `maplibre_gl 0.26.0`'s default `13.0.+` resolution. The +38 build
+// confirmed local-file MBTiles/PMTiles fails to render under stable
+// 13.0.2; trying 13.0.3-pre0 before falling through to the localhost
+// HTTP-server workaround (cheaper if the upstream pre-release happens
+// to fix it).
+configurations.all {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "org.maplibre.gl" &&
+            requested.name == "android-sdk-opengl") {
+            useVersion("13.0.3-pre0")
+            because("Trying upstream pre-release before HTTP-server workaround")
+        }
+    }
+}
+
 flutter {
     source = "../.."
 }
