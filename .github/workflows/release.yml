@@ -73,13 +73,22 @@ jobs:
 
       - name: Get version from pubspec
         id: version
+        # Tag and asset names include the build number so every push gets
+        # its own release. Using `+` in tags works on GitHub but URL-encodes
+        # to `%2B`, which clutters the release URL — so we replace `+` with
+        # `-` for the tag (and asset filename), keeping the canonical
+        # `0.8.0+31` only inside the human-facing release name and the
+        # CHANGELOG. Result:
+        #   tag:    v0.8.0-31
+        #   name:   v0.8.0+31
+        #   asset:  Trail-v0.8.0-31.apk
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f1)
           BUILD=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f2)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "build=$BUILD" >> $GITHUB_OUTPUT
-          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
-          echo "name=v$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION-$BUILD" >> $GITHUB_OUTPUT
+          echo "name=v$VERSION+$BUILD" >> $GITHUB_OUTPUT
 
       - name: Extract CHANGELOG section for this release
         id: changelog

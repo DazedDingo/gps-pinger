@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.8.0+32] — 2026-04-27
+
+### Changed
+- **Each push now gets its own GitHub release.** The release workflow used to tag every build under `v<SemVer>` and overwrite the same `Trail-v<SemVer>.apk`, so successive build bumps couldn't be told apart from the release page (the only place the build number was visible was Settings → App version). Tags now include the build number — `v0.8.0-32` — and asset filenames follow suit: `Trail-v0.8.0-32.apk`. Older releases and the previously-shared `v0.8.0` tag stay where they are.
+
 ## [0.8.0+31] — 2026-04-27
 
 ### Fixed
