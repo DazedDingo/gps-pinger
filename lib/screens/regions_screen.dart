@@ -88,10 +88,11 @@ class RegionsScreen extends ConsumerWidget {
     if (result == null || result.files.isEmpty) return;
     final path = result.files.single.path;
     if (path == null) return;
-    if (!path.toLowerCase().endsWith('.pmtiles')) {
+    final lower = path.toLowerCase();
+    if (!lower.endsWith('.pmtiles') && !lower.endsWith('.mbtiles')) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pick a .pmtiles file')),
+          const SnackBar(content: Text('Pick a .mbtiles or .pmtiles file')),
         );
       }
       return;
@@ -250,8 +251,8 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Tap Install and pick a .pmtiles file. See docs/TILES.md '
-            'for building one on your PC.',
+            'Tap Install and pick a .mbtiles or .pmtiles file. See '
+            'docs/TILES.md for building one on your PC.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall,
           ),

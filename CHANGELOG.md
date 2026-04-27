@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.8.0+37] — 2026-04-27
+
+### Added
+- **MBTiles support alongside PMTiles.** The Regions screen file picker now accepts both `.mbtiles` and `.pmtiles` files, and `TrailStyle` picks the right URL scheme per extension (`mbtiles:///<path>` vs `pmtiles://file://<path>`). Added because the +35 diagnostic confirmed maplibre 0.3.5 *can* render PMTiles on Android, but only over HTTPS — local-file PMTiles silently 404s. MBTiles is the older, more battle-tested path through MapLibre Native and works for the same data with a different file format. Planetiler emits MBTiles directly; same `--maxzoom`, same OpenMapTiles schema, slightly larger file.
+
 ## [0.8.0+36] — 2026-04-27
 
 ### Changed

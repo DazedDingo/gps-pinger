@@ -40,10 +40,12 @@ class TilesRegion {
 class TilesService {
   static const _activeKey = 'trail_active_tiles_v1';
   static const _dirName = 'tiles';
-  static const _extension = '.pmtiles';
+  static const _extensions = ['.mbtiles', '.pmtiles'];
 
-  /// Lists every `.pmtiles` file currently installed. Returns `[]` if
-  /// the directory doesn't exist yet (fresh install).
+  /// Lists every supported tile-archive file currently installed. We
+  /// accept `.mbtiles` and `.pmtiles`; the renderer picks the right URL
+  /// scheme per file. Returns `[]` if the directory doesn't exist yet
+  /// (fresh install).
   static Future<List<TilesRegion>> listInstalled() async {
     final dir = await _ensureDir();
     if (!await dir.exists()) return const [];
@@ -51,7 +53,8 @@ class TilesService {
     final regions = <TilesRegion>[];
     for (final e in entries) {
       if (e is! File) continue;
-      if (!e.path.toLowerCase().endsWith(_extension)) continue;
+      final lower = e.path.toLowerCase();
+      if (!_extensions.any(lower.endsWith)) continue;
       final stat = await e.stat();
       regions.add(TilesRegion(
         name: _nameFromPath(e.path),
