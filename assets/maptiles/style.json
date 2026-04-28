@@ -17,8 +17,8 @@
       "scheme": "xyz"
     }
   },
-  "sprite": "asset://flutter_assets/assets/maptiles/sprites/osm-liberty",
-  "glyphs": "asset://flutter_assets/assets/maptiles/glyphs/{fontstack}/{range}.pbf",
+  "sprite": "__TRAIL_SPRITE__",
+  "glyphs": "__TRAIL_GLYPHS__/{fontstack}/{range}.pbf",
   "layers": [
     {
       "id": "background",

@@ -67,19 +67,34 @@ class TrailStyle {
     int? tileServerPort,
   }) {
     final lower = activeRegionPath.toLowerCase();
-    final url = switch ((lower.endsWith('.mbtiles'), tileServerPort)) {
-      // 0.8.0+46: bypass TileJSON entirely. The bundled style now
-      // declares a `tiles: ["pmtiles://__TRAIL_ACTIVE_REGION__"]`
-      // array; we substitute the placeholder with the per-tile URL
-      // template so MapLibre fetches MVT directly without a TileJSON
-      // round-trip first. Reduces the moving parts to "just MVT
-      // bytes from a URL" — same as the remote PMTiles diagnostic
-      // path that rendered cleanly in +35.
+    final tileUrl = switch ((lower.endsWith('.mbtiles'), tileServerPort)) {
+      // 0.8.0+46: bypass TileJSON entirely. The bundled style declares
+      // `tiles: ["pmtiles://__TRAIL_ACTIVE_REGION__"]`; we substitute
+      // the placeholder with a per-tile URL template so MapLibre
+      // fetches MVT directly without a TileJSON round-trip.
       (true, final int port) =>
         'http://127.0.0.1:$port/{z}/{x}/{y}.pbf',
       (true, _) => 'mbtiles://$activeRegionPath',
       _ => 'pmtiles://file://$activeRegionPath',
     };
-    return rawStyleJson.replaceAll(_placeholder, url);
+    // 0.8.0+49: glyphs and sprites also go through the loopback now.
+    // maplibre_gl on Android can't read `asset://flutter_assets/...`
+    // URLs (confirmed by the +48 log capture: "Could not read asset"
+    // for every Roboto fontstack), and a missing-glyphs failure
+    // cascades — maplibre cancels in-flight tile requests and
+    // renders nothing. LocalTileServer now serves
+    // `/glyphs/<fontstack>/<range>.pbf` and `/sprites/<name>` from
+    // the bundled rootBundle, so we get a single delivery path the
+    // renderer is happy with.
+    final glyphsBase = tileServerPort != null
+        ? 'http://127.0.0.1:$tileServerPort/glyphs'
+        : 'asset://flutter_assets/assets/maptiles/glyphs';
+    final spriteBase = tileServerPort != null
+        ? 'http://127.0.0.1:$tileServerPort/sprites/osm-liberty'
+        : 'asset://flutter_assets/assets/maptiles/sprites/osm-liberty';
+    return rawStyleJson
+        .replaceAll(_placeholder, tileUrl)
+        .replaceAll('__TRAIL_GLYPHS__', glyphsBase)
+        .replaceAll('__TRAIL_SPRITE__', spriteBase);
   }
 }

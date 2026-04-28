@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.8.0+49] — 2026-04-28
+
+### Fixed
+- **Glyphs + sprites served over the same loopback HTTP server.** `+48`'s log capture caught the smoking gun: maplibre-native logs `Failed to load glyph range 0-255 for font stack Roboto Regular: ( Could not read asset)` (and the same for Medium and Condensed Italic) — `asset://flutter_assets/...` URLs are unreachable from maplibre's Android asset source. The renderer then cancels every in-flight tile request (HTTP "Canceled" / "Socket closed" warnings in the same log) and shows nothing. `LocalTileServer` now also handles `/glyphs/<fontstack>/<range>.pbf` and `/sprites/osm-liberty(@2x)?(.json|.png)?`, reading from `rootBundle`. Bundled style placeholders `__TRAIL_GLYPHS__` and `__TRAIL_SPRITE__` rewrite to loopback URLs at runtime, same way `__TRAIL_ACTIVE_REGION__` already did.
+
 ## [0.8.0+48] — 2026-04-28
 
 ### Fixed

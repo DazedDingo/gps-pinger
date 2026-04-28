@@ -20,6 +20,29 @@ void main() {
       expect(out, isNot(contains('__TRAIL_ACTIVE_REGION__')));
     });
 
+    test('glyphs + sprite placeholders rewrite to loopback when port set', () {
+      // Regression: 0.8.0+47 logged "Could not read asset" for every
+      // Roboto fontstack on Android. asset://flutter_assets/... is
+      // unreachable from maplibre-native's Android asset source. The
+      // workaround serves glyphs + sprites over the same loopback HTTP
+      // server as tiles — proven path in +47's diagnostic.
+      const raw =
+          '"glyphs": "__TRAIL_GLYPHS__/{fontstack}/{range}.pbf",\n'
+          '"sprite": "__TRAIL_SPRITE__"';
+      final out = TrailStyle.substituteRegionPath(
+        raw,
+        '/x/gb.mbtiles',
+        tileServerPort: 8327,
+      );
+      expect(
+        out,
+        contains('http://127.0.0.1:8327/glyphs/{fontstack}/{range}.pbf'),
+      );
+      expect(out, contains('http://127.0.0.1:8327/sprites/osm-liberty'));
+      expect(out, isNot(contains('__TRAIL_GLYPHS__')));
+      expect(out, isNot(contains('__TRAIL_SPRITE__')));
+    });
+
     test('MBTiles paths fall back to bare mbtiles:// when no port given', () {
       // No tile-server port = the broken native path; kept for
       // parity in case the upstream fix lands.

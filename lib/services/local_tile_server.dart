@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:sqflite_sqlcipher/sqflite.dart';
 
 /// Serves vector tiles from a local `.mbtiles` file over a localhost
@@ -109,13 +111,36 @@ class LocalTileServer {
         await _serveTileJson(req);
         return;
       }
-      final m = _tilePathRegex.firstMatch(path);
-      if (m != null) {
+      final tileMatch = _tilePathRegex.firstMatch(path);
+      if (tileMatch != null) {
         await _serveTile(
           req,
-          int.parse(m.group(1)!),
-          int.parse(m.group(2)!),
-          int.parse(m.group(3)!),
+          int.parse(tileMatch.group(1)!),
+          int.parse(tileMatch.group(2)!),
+          int.parse(tileMatch.group(3)!),
+        );
+        return;
+      }
+      // Glyphs: /glyphs/<fontstack>/<range>.pbf — fontstack may
+      // contain spaces (e.g. "Roboto Regular"), MapLibre URL-encodes
+      // them as `%20`. Decode by handing the path to Uri.decodeFull.
+      final glyphMatch = _glyphPathRegex.firstMatch(Uri.decodeFull(path));
+      if (glyphMatch != null) {
+        await _serveAsset(
+          req,
+          'assets/maptiles/glyphs/${glyphMatch.group(1)}/${glyphMatch.group(2)}.pbf',
+          ContentType('application', 'x-protobuf'),
+        );
+        return;
+      }
+      // Sprites: /sprites/osm-liberty(.json|.png|@2x.json|@2x.png)
+      final spriteMatch = _spritePathRegex.firstMatch(path);
+      if (spriteMatch != null) {
+        final isJson = spriteMatch.group(2)?.endsWith('.json') ?? false;
+        await _serveAsset(
+          req,
+          'assets/maptiles/sprites/${spriteMatch.group(1)}${spriteMatch.group(2) ?? ''}',
+          isJson ? ContentType.json : ContentType('image', 'png'),
         );
         return;
       }
@@ -127,6 +152,28 @@ class LocalTileServer {
         await req.response.close();
       } catch (_) {/* response already gone */}
     }
+  }
+
+  Future<void> _serveAsset(
+    HttpRequest req,
+    String assetKey,
+    ContentType contentType,
+  ) async {
+    final ByteData data;
+    try {
+      data = await rootBundle.load(assetKey);
+    } catch (_) {
+      req.response.statusCode = HttpStatus.notFound;
+      await req.response.close();
+      return;
+    }
+    final bytes =
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+    req.response.headers.contentType = contentType;
+    req.response.headers.set('Cache-Control', 'public, max-age=31536000');
+    req.response.headers.contentLength = bytes.length;
+    req.response.add(bytes);
+    await req.response.close();
   }
 
   Future<void> _serveTileJson(HttpRequest req) async {
@@ -252,4 +299,10 @@ class LocalTileServer {
 
   static final RegExp _tilePathRegex =
       RegExp(r'^/(\d+)/(\d+)/(\d+)\.pbf$');
+  // Fontstack may have spaces — assume the URL is already
+  // percent-decoded by the caller before matching.
+  static final RegExp _glyphPathRegex =
+      RegExp(r'^/glyphs/([^/]+)/([^/.]+)\.pbf$');
+  static final RegExp _spritePathRegex =
+      RegExp(r'^/sprites/([^/.]+)(@2x)?(\.json|\.png)?$');
 }
