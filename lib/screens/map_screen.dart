@@ -84,7 +84,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pingsAsync = ref.watch(allPingsProvider);
+    // SQL-filter at the DAO layer when a date range is set so the
+    // round-trip is proportional to the filter window, not the full
+    // table. `null` keeps `allPingsProvider`'s behaviour.
+    final pingsAsync = ref.watch(pingsByRangeProvider(_dateFilter));
     final activeRegion = ref.watch(activeRegionProvider).valueOrNull;
     final tileServerPort = ref.watch(tileServerProvider).valueOrNull;
 
@@ -175,21 +178,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   'Tap the Regions icon (top right) → Install.',
             );
           }
-          // Apply the optional date filter. The filtered list is what
-          // the slider, annotation refresh, and bbox-fit all see; the
-          // unfiltered tail outside the window is invisible to the
-          // map for as long as the filter is active.
-          final fixes = _dateFilter == null
-              ? allFixes
-              : allFixes
-                  .where((p) =>
-                      !p.timestampUtc.isBefore(_dateFilter!.start) &&
-                      !p.timestampUtc
-                          .isAfter(_dateFilter!.end.add(
-                              const Duration(days: 1) -
-                                  const Duration(milliseconds: 1))))
-                  .toList(growable: false);
-          if (fixes.isEmpty) {
+          // The provider already returned only the rows matching the
+          // active filter (SQL-side), so the list is the trail to
+          // render verbatim — no client-side re-filtering needed.
+          if (_dateFilter != null && allFixes.isEmpty) {
             return _EmptyState(
               message:
                   'No fixes in '
@@ -197,7 +189,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   'Tap the calendar icon to clear or change the filter.',
             );
           }
-          return _buildBody(context, fixes, activeRegion);
+          return _buildBody(context, allFixes, activeRegion);
         },
       ),
     );
@@ -404,7 +396,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   void _refreshAnnotationsIfReady() {
     if (!_styleReady || _controller == null) return;
-    final pings = ref.read(allPingsProvider).valueOrNull;
+    // Read whichever ping set is active given the date filter, so a
+    // filtered view's slider scrubs through only the filtered subset.
+    final pings = ref.read(pingsByRangeProvider(_dateFilter)).valueOrNull;
     if (pings == null) return;
     final chrono = pings
         .where((p) => p.lat != null && p.lon != null)
@@ -655,7 +649,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     };
     setState(() => _playbackSpeed = next);
     if (_playing) {
-      final pings = ref.read(allPingsProvider).valueOrNull;
+      // Honour the active date filter on speed-cycle so playback
+      // scrubs through the filtered subset, not the full table.
+      final pings =
+          ref.read(pingsByRangeProvider(_dateFilter)).valueOrNull;
       if (pings != null) {
         final fixes = pings
             .where((p) => p.lat != null && p.lon != null)

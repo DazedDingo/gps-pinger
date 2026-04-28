@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show DateTimeRange;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../db/database.dart';
@@ -25,6 +26,28 @@ final recentPingsProvider = FutureProvider<List<Ping>>((ref) async {
 final allPingsProvider = FutureProvider<List<Ping>>((ref) async {
   final db = await TrailDatabase.shared();
   return PingDao(db).all();
+});
+
+/// Date-bounded chronological history. Same shape as
+/// [allPingsProvider] but clipped at the SQL layer so a "last
+/// weekend" filter doesn't round-trip the full `pings` table only to
+/// drop most rows in Dart. Pass `null` to fall back to the unbounded
+/// query — equivalent to `allPingsProvider` but goes through this
+/// provider's family identity so the map screen can switch between
+/// filtered and unfiltered without flipping providers.
+final pingsByRangeProvider =
+    FutureProvider.family<List<Ping>, DateTimeRange?>((ref, range) async {
+  final db = await TrailDatabase.shared();
+  final dao = PingDao(db);
+  if (range == null) return dao.all();
+  // The user-facing range is local-day; convert to UTC for the
+  // SQL where-clause. End-of-day is `start-of-next-day - 1ms` so
+  // a single-day filter actually catches the entire day.
+  final startUtc = range.start.toUtc();
+  final endUtc = range.end
+      .add(const Duration(days: 1) - const Duration(milliseconds: 1))
+      .toUtc();
+  return dao.byDateRange(startUtc, endUtc);
 });
 
 /// Last successful fix (null-coord rows excluded). Feeds the home-screen

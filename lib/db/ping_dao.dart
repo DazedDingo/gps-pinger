@@ -54,6 +54,24 @@ class PingDao {
     return rows.map(Ping.fromMap).toList();
   }
 
+  /// Pings whose `ts_utc` falls in `[startUtc, endUtc]` (inclusive on
+  /// both ends). Same chronological (oldest-first) order as [all],
+  /// just clipped at the SQL layer so the map's date-range filter
+  /// doesn't have to round-trip the full `pings` table when the user
+  /// only cares about last weekend.
+  Future<List<Ping>> byDateRange(DateTime startUtc, DateTime endUtc) async {
+    final rows = await db.query(
+      'pings',
+      where: 'ts_utc BETWEEN ? AND ?',
+      whereArgs: [
+        startUtc.millisecondsSinceEpoch,
+        endUtc.millisecondsSinceEpoch,
+      ],
+      orderBy: 'ts_utc ASC',
+    );
+    return rows.map(Ping.fromMap).toList();
+  }
+
   Future<int> count() async {
     final r = await db.rawQuery('SELECT COUNT(*) AS c FROM pings');
     return (r.first['c'] as int?) ?? 0;

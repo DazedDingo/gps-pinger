@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.9.4+61] — 2026-04-28
+
+### Changed
+- **Lazy ping pagination via SQL-side date filtering.** `PingDao.byDateRange` and the new `pingsByRangeProvider` family take a `DateTimeRange?` and run a `WHERE ts_utc BETWEEN ? AND ?` at the SQL layer. The map screen now reads from this provider; when a filter is active, the round-trip is proportional to the filter window rather than the full `pings` table. With `null` range it falls through to `dao.all()` so the unfiltered view's behaviour is unchanged. The slider, playback re-arm, and refresh paths all honour the same filter so swapping the active range stays consistent.
+
 ## [0.9.3+60] — 2026-04-28
 
 ### Added
