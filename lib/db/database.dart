@@ -74,6 +74,16 @@ class TrailDatabase {
       version: _schemaVersion,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
+      // `singleInstance: true` (sqflite's default) makes the platform
+      // plugin return the *same* native database handle whenever
+      // openDatabase is called for the same path — even from a
+      // different isolate. The WorkManager worker opens the DB at
+      // every cadence tick and closes it in a `finally`, which would
+      // then tear down the UI isolate's shared handle: the next
+      // `recentPingsProvider` query fails with "database is closed".
+      // Each isolate gets its own native handle now; close-in-worker
+      // no longer touches the UI's.
+      singleInstance: false,
     );
   }
 
@@ -125,7 +135,14 @@ class TrailDatabase {
     required String newKey,
   }) async {
     final path = await dbPath();
-    final db = await openDatabase(path, password: currentKey);
+    final db = await openDatabase(
+      path,
+      password: currentKey,
+      // Independent native handle — see `_openWithKey` for the
+      // singleInstance rationale. Rekey closes its own handle in
+      // the finally block below; that close must not propagate.
+      singleInstance: false,
+    );
     try {
       // SQLCipher doesn't parameterise PRAGMA values, but newKey comes
       // from our own base64url-encoded PBKDF2 output — no user text

@@ -53,7 +53,15 @@ class LocalTileServer {
       return _server!.port;
     }
     await stop();
-    _db = await openDatabase(mbtilesPath, readOnly: true);
+    _db = await openDatabase(
+      mbtilesPath,
+      readOnly: true,
+      // Per-call native handle so close()-on-stop doesn't bleed into
+      // any other plugin-tracked DB. Different path from the encrypted
+      // Trail DB so this is mostly belt-and-braces, but the cost is
+      // zero and the convention is set in `database.dart`.
+      singleInstance: false,
+    );
     _metadata = await _readMetadata(_db!);
     _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     _activePath = mbtilesPath;

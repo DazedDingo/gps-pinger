@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.8.0+43] — 2026-04-28
+
+### Fixed
+- **"database is closed" on the home / map screen.** The encrypted Trail DB and the WorkManager worker were both opening with sqflite's default `singleInstance: true`, which makes the platform plugin return the *same* native handle across isolates. The 4h worker would tick in the background, do its work, and `close()` in a `finally` — and that close tore down the UI isolate's `_shared` handle out from under it; the next `recentPingsProvider` query then surfaced as a database error card. All `openDatabase` calls in `database.dart` and `local_tile_server.dart` now pass `singleInstance: false`, so each isolate gets its own native handle and close-in-worker can no longer affect the UI. CLAUDE.md gotcha #1 was already aware of this in spirit; the code finally agrees.
+
 ## [0.8.0+42] — 2026-04-28
 
 ### Fixed
