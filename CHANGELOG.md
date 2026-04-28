@@ -4,6 +4,12 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.10.3+67] — 2026-04-28
+
+### Fixed
+- **"Previous" pin was indistinguishable from earlier pins.** The 0.10.2+66 styling used `scheme.secondary` at radius 6 — but secondary in the Material 3 dark theme derives from the same teal seed as primary, so it read as just-another-small-circle. The previous fix is now a hollow amber ring (radius 10, transparent fill, thick `#FFB300` stroke) — a warm-tone outline that pops against both the teal small pins and the tertiary-tinted head. The HUD's "Prev" dot uses the same amber so the legend matches.
+- **Backward slider drag left the path line at its full pre-drag length.** Two compounding bugs. (1) Rapid slider drags fired `_refreshAnnotations` on every onChanged event, so 5+ refreshes ran concurrently and raced on the shared `_renderedCircles` list — the line update from one call was overwritten by an in-flight remove from another, leaving the geometry stale. New single-flight wrapper (`_scheduleRefresh` + `_runRefreshLoop`) collapses bursts into "current run + at most one pending"; the loop drains it once and exits. (2) maplibre_gl's `updateLine` → `setGeoJsonFeature` path on Android annotations didn't reliably redraw on geometry shrinkage. Brute-force fix on the backward path: `removeLine` + `addLine` rather than `updateLine`. One extra platform call per backward step but the line now visibly shrinks in lock-step with the slider.
+
 ## [0.10.2+66] — 2026-04-28
 
 ### Added

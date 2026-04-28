@@ -89,6 +89,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   List<Circle> _renderedCircles = [];
   String? _pathRenderKey;
 
+  /// Single-flight serialization for [_refreshAnnotations]. A rapid
+  /// slider drag fires `setState + _refreshAnnotationsIfReady` on
+  /// every onChanged event — at 60 fps that's 16 concurrent
+  /// in-flight refreshes per second, all racing on the shared
+  /// `_renderedCircles` list and producing inconsistent visuals
+  /// (most visibly: the line geometry stuck at the pre-drag length).
+  /// The pending slot collapses bursts: while one refresh runs,
+  /// later requests overwrite the pending target rather than
+  /// stacking. The loop drains it once and exits.
+  List<Ping>? _pendingRefreshFixes;
+  ColorScheme? _pendingRefreshScheme;
+  bool _refreshLoopActive = false;
+
   /// Playback: advances `_sliderMax` one ping at a time until it reaches
   /// the last fix, then auto-pauses. Step interval = `_basePlaybackStep
   /// / _playbackSpeed`, so 1× shows each ping for ~350ms, 4× for ~90ms,
@@ -391,7 +404,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           },
           onStyleLoadedCallback: () {
             _styleReady = true;
-            _refreshAnnotations(visibleFixes, Theme.of(context).colorScheme);
+            _scheduleRefresh(
+              visibleFixes,
+              Theme.of(context).colorScheme,
+            );
             if (!_initialFitDone && visibleFixes.isNotEmpty) {
               _initialFitDone = true;
               _fitToFixes(visibleFixes);
@@ -447,7 +463,31 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final visible = chrono
         .where((p) => !p.timestampUtc.isAfter(sliderMax))
         .toList(growable: false);
-    _refreshAnnotations(visible, Theme.of(context).colorScheme);
+    _scheduleRefresh(visible, Theme.of(context).colorScheme);
+  }
+
+  /// Public entry point — collapses bursts of refresh requests into
+  /// "current run + at most one queued". See `_pendingRefreshFixes`.
+  void _scheduleRefresh(List<Ping> visibleFixes, ColorScheme scheme) {
+    _pendingRefreshFixes = visibleFixes;
+    _pendingRefreshScheme = scheme;
+    if (_refreshLoopActive) return;
+    _refreshLoopActive = true;
+    unawaited(_runRefreshLoop());
+  }
+
+  Future<void> _runRefreshLoop() async {
+    try {
+      while (_pendingRefreshFixes != null && mounted) {
+        final fixes = _pendingRefreshFixes!;
+        final scheme = _pendingRefreshScheme!;
+        _pendingRefreshFixes = null;
+        _pendingRefreshScheme = null;
+        await _refreshAnnotations(fixes, scheme);
+      }
+    } finally {
+      _refreshLoopActive = false;
+    }
   }
 
   /// Render visible fixes onto the map. For path-mode playback (slider
@@ -640,15 +680,24 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       );
     }
 
-    if (newLength <= 1) {
-      // Line needs at least 2 points; when we shrink past that
-      // threshold, drop the line entirely. Re-added next forward step.
-      if (_pathLine != null) {
-        await c.removeLine(_pathLine!);
-        _pathLine = null;
-      }
-    } else {
-      await _updatePathLine(c, points, scheme);
+    // Line shrinkage via maplibre_gl's updateLine → setGeoJsonFeature
+    // path produced inconsistent visuals on the Android annotations
+    // layer — the rendered line stayed at its pre-drag length even
+    // after the geometry update. Brute-force fix: drop the line and
+    // re-add it with the shorter geometry. One extra platform call
+    // per backward step, vs. lying-to-user about where the trail
+    // ends.
+    if (_pathLine != null) {
+      await c.removeLine(_pathLine!);
+      _pathLine = null;
+    }
+    if (_showPath && newLength >= 2) {
+      _pathLine = await c.addLine(LineOptions(
+        geometry: points,
+        lineColor: scheme.primary.toHexStringRGB(),
+        lineWidth: 3,
+        lineOpacity: 0.85,
+      ));
     }
   }
 
@@ -696,13 +745,23 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         circleStrokeOpacity: 0.85,
       );
 
+  /// Hollow amber ring around the previous fix. Hollow + warm-tone +
+  /// large-radius is the loudest visual contrast available against
+  /// Trail's teal seed palette and the small filled-teal earlier
+  /// pins. The earlier `scheme.secondary` filled circle wasn't
+  /// distinct enough — secondary in the M3 dark theme derives from
+  /// the same teal seed as primary and read identical at a glance.
   CircleOptions _prevOptions(LatLng p, ColorScheme scheme) => CircleOptions(
         geometry: p,
-        circleRadius: 6,
-        circleColor: scheme.secondary.toHexStringRGB(),
-        circleStrokeWidth: 1.5,
-        circleStrokeColor: '#FFFFFF',
-        circleStrokeOpacity: 0.9,
+        circleRadius: 10,
+        // Hollow — fill is invisible. The amber stroke is what you
+        // see. Setting opacity rather than `transparent` because the
+        // platform side parses hex more reliably than named colors.
+        circleColor: '#FFB300',
+        circleOpacity: 0,
+        circleStrokeWidth: 3,
+        circleStrokeColor: '#FFB300',
+        circleStrokeOpacity: 1.0,
       );
 
   CircleOptions _headOptions(LatLng p, ColorScheme scheme) => CircleOptions(
@@ -1156,7 +1215,9 @@ class _PlaybackHud extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _Dot(color: theme.colorScheme.secondary),
+                    // Match the amber hollow-ring style on the map's
+                    // previous pin so the legend is visually obvious.
+                    _Dot(color: const Color(0xFFFFB300)),
                     const SizedBox(width: 6),
                     Text(
                       'Prev ${fmt.format(previous!.timestampUtc.toLocal())} · '
