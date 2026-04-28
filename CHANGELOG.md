@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.9.5+62] — 2026-04-28
+
+### Added
+- **Encrypted export with passphrase.** New "Encrypt with passphrase" toggle in the export dialog. Each GPX/CSV exported in this run is wrapped in a `TRLENC01`-tagged AES-256-GCM blob with a PBKDF2-HMAC-SHA256-derived key (210 000 iterations, same work factor as the SQLCipher passphrase mode). Format: `magic[8] || salt[16] || nonce[12] || ciphertext || gcmTag[16]`. Plaintext temp files are best-effort deleted after encryption. The companion `docs/decrypt-export.py` (depends on Python's `cryptography` package) reverses the format with `python decrypt-export.py file.gpx.enc` — passphrase prompted on stdin.
+
 ## [0.9.4+61] — 2026-04-28
 
 ### Changed

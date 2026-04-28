@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
@@ -5,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import '../db/database.dart';
 import '../db/ping_dao.dart';
 import '../models/ping.dart';
+import '../services/encrypted_export_service.dart';
 import '../services/export/csv_exporter.dart';
 import '../services/export/gpx_exporter.dart';
 
@@ -51,6 +55,7 @@ class _ExportDialogState extends State<ExportDialog> {
 
   DateTimeRange? _range;
   ExportFormat _format = ExportFormat.gpxAndCsv;
+  bool _encrypt = false;
   bool _working = false;
   String? _error;
 
@@ -102,11 +107,29 @@ class _ExportDialogState extends State<ExportDialog> {
           _format == ExportFormat.csvOnly) {
         files.add(await CsvExporter().export(filtered));
       }
+
+      String? passphrase;
+      if (_encrypt) {
+        if (!mounted) return;
+        passphrase = await _promptPassphrase();
+        if (passphrase == null) {
+          // User cancelled — abort the share, leave the plaintext
+          // exports on disk in the temp dir for the OS to GC.
+          setState(() => _working = false);
+          return;
+        }
+      }
+
+      final shareFiles = passphrase == null
+          ? files
+          : await _encryptFiles(files, passphrase);
+
       if (!mounted) return;
       Navigator.of(context).pop();
       await Share.shareXFiles(
-        files.map(XFile.new).toList(),
-        subject: 'Trail export ($_rangeLabel)',
+        shareFiles.map(XFile.new).toList(),
+        subject: 'Trail export ($_rangeLabel)'
+            '${_encrypt ? ' — encrypted' : ''}',
       );
     } catch (e) {
       if (!mounted) return;
@@ -115,6 +138,86 @@ class _ExportDialogState extends State<ExportDialog> {
         _error = '$e';
       });
     }
+  }
+
+  /// Reads each file at [paths] from disk, encrypts it with
+  /// [passphrase], writes a `<original>.enc` sibling, and returns
+  /// the encrypted paths. Plaintext temp files are best-effort
+  /// deleted afterwards so a careless OS file manager can't surface
+  /// them.
+  Future<List<String>> _encryptFiles(
+    List<String> paths,
+    String passphrase,
+  ) async {
+    final out = <String>[];
+    for (final path in paths) {
+      final file = File(path);
+      final bytes = await file.readAsBytes();
+      final encrypted = EncryptedExportService.encrypt(
+        Uint8List.fromList(bytes),
+        passphrase,
+      );
+      final encPath = '$path.enc';
+      await File(encPath).writeAsBytes(encrypted, flush: true);
+      out.add(encPath);
+      try {
+        await file.delete();
+      } catch (_) {/* best-effort */}
+    }
+    return out;
+  }
+
+  /// Bottom-sheet-style passphrase dialog with the same validation
+  /// rules `EncryptedExportService` uses. Returns the passphrase, or
+  /// `null` if the user cancelled.
+  Future<String?> _promptPassphrase() async {
+    final controller = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    return showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Encrypt export'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Pick a passphrase. The file is AES-256-GCM with a '
+                'PBKDF2-derived key (210k iterations). Decrypt with '
+                'docs/decrypt-export.py from this repo.',
+                style: TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: controller,
+                autofocus: true,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Passphrase',
+                ),
+                validator: EncryptedExportService.validatePassphrase,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() ?? false) {
+                Navigator.pop(c, controller.text);
+              }
+            },
+            child: const Text('Encrypt + share'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -184,6 +287,21 @@ class _ExportDialogState extends State<ExportDialog> {
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.lock_outline),
+              title: const Text('Encrypt with passphrase'),
+              subtitle: const Text(
+                'AES-256-GCM, PBKDF2 (210k). Decrypt with '
+                'docs/decrypt-export.py.',
+              ),
+              isThreeLine: true,
+              value: _encrypt,
+              onChanged: _working
+                  ? null
+                  : (v) => setState(() => _encrypt = v),
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
