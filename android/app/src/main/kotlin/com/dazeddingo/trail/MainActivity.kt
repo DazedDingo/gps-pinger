@@ -20,5 +20,10 @@ class MainActivity : FlutterFragmentActivity() {
         CellWifiPlugin.register(flutterEngine, applicationContext)
         PanicMethodChannel.register(flutterEngine, applicationContext)
         SchedulerMethodChannel.register(flutterEngine, applicationContext)
+        // Must register *before* the first MapLibreMap mounts so the
+        // logger override catches early style/source errors. Cheap to
+        // install (a single LoggerDefinition swap) and falls through
+        // to android.util.Log so adb logcat still works.
+        MapLibreLogTrap.register(flutterEngine)
     }
 }

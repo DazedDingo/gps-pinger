@@ -10,6 +10,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import '../models/ping.dart';
 import '../providers/tile_server_provider.dart';
 import '../services/local_tile_server.dart';
+import '../services/maplibre_log_reader.dart';
 import '../services/mbtiles_service.dart';
 import '../services/trail_style.dart';
 
@@ -287,6 +288,7 @@ class _DiagnosticOverlay extends StatefulWidget {
 
 class _DiagnosticOverlayState extends State<_DiagnosticOverlay> {
   String _serverPing = '?';
+  List<String> _mapLogs = const [];
   Timer? _refreshTimer;
 
   static String _pathTail(String path) {
@@ -302,8 +304,9 @@ class _DiagnosticOverlayState extends State<_DiagnosticOverlay> {
     // pan the map and watch `tileReqs` and `lastTile` update — vital
     // for telling apart "MapLibre never asked the server" from
     // "MapLibre asked but the response was rejected".
-    _refreshTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      if (mounted) setState(() {});
+    _refreshTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      final logs = await MapLibreLogReader.getRecent();
+      if (mounted) setState(() => _mapLogs = logs);
     });
   }
 
@@ -355,13 +358,22 @@ class _DiagnosticOverlayState extends State<_DiagnosticOverlay> {
     final portText = widget.tileServerPort?.toString() ?? 'off';
     final reqs = LocalTileServer.instance.tileRequestCount;
     final lastStatus = LocalTileServer.instance.lastTileStatus;
+    // Last few maplibre log lines for the inline preview.
+    final logTail = _mapLogs.length <= 3
+        ? _mapLogs.join('\n')
+        : _mapLogs.sublist(_mapLogs.length - 3).join('\n');
+    final logFull = _mapLogs.isEmpty
+        ? '(no maplibre logs yet)'
+        : _mapLogs.join('\n');
     final dump = 'last: ${widget.lastEvent}\n'
         'fileExists: $exists\n'
         'tileServerPort: $portText\n'
         'serverPing: $_serverPing\n'
         'tileReqs: $reqs\n'
         'lastTile: $lastStatus\n'
-        'path: ${widget.regionPath}';
+        'path: ${widget.regionPath}\n'
+        '\n--- maplibre logs (last ${_mapLogs.length}) ---\n'
+        '$logFull';
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -409,9 +421,33 @@ class _DiagnosticOverlayState extends State<_DiagnosticOverlay> {
                   'tail: …${_pathTail(widget.regionPath)}',
                   overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  'mapLogs (${_mapLogs.length}):',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                if (_mapLogs.isEmpty)
+                  const Text(
+                    '(none yet)',
+                    style: TextStyle(color: Colors.white60),
+                  )
+                else
+                  // SelectableText so the log lines can be selected and
+                  // copied directly without going through the
+                  // clipboard-dump action; useful for grabbing a single
+                  // error message quickly. The tap handler below still
+                  // copies the WHOLE diagnostic + log buffer.
+                  SelectableText(
+                    logTail,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      height: 1.2,
+                    ),
+                  ),
                 const SizedBox(height: 2),
                 const Text(
-                  '(tap = copy · long-press = retest+refresh)',
+                  '(tap = copy ALL · long-press = retest+refresh)',
                   style: TextStyle(
                     fontSize: 10,
                     color: Colors.white70,

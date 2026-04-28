@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.8.0+47] — 2026-04-28
+
+### Added
+- **In-app maplibre-native log capture.** `MapLibreLogTrap.kt` registers a `LoggerDefinition` with maplibre-native at startup that mirrors every log entry into a 200-line process-local ring buffer (and still calls through to `android.util.Log` so logcat works for adb-equipped users). A `MethodChannel` (`com.dazeddingo.trail/maplibre_logs`) exposes the buffer to Flutter; the home-screen diagnostic overlay polls it every 2s and shows the last 3 lines inline. Tapping the overlay copies the full diagnostic + log buffer to the clipboard. Long-press still re-pings the tile server. The inline log lines are `SelectableText` so individual messages can be copied without grabbing the whole dump.
+
 ## [0.8.0+46] — 2026-04-28
 
 ### Changed
