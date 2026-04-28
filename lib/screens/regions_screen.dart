@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers/mbtiles_provider.dart';
+import '../services/github_api.dart';
 import '../services/mbtiles_service.dart';
 import '../services/tile_catalog.dart';
 import '../services/tile_downloader.dart';
@@ -110,6 +111,17 @@ class RegionsScreen extends ConsumerWidget {
               subtitle: const Text('Pre-built regions, one tap to install'),
               onTap: () => Navigator.pop(c, _AddSource.catalog),
             ),
+            ListTile(
+              leading: const Icon(Icons.build_outlined),
+              title: const Text('Build a region (GitHub Actions)'),
+              subtitle: const Text(
+                'Pick a bbox + zoom, GitHub Actions builds an MBTiles, '
+                'lands in the catalog ~10–20 min later. Needs a GitHub '
+                'token in Settings.',
+              ),
+              isThreeLine: true,
+              onTap: () => Navigator.pop(c, _AddSource.build),
+            ),
             const SizedBox(height: 8),
           ],
         ),
@@ -123,6 +135,8 @@ class RegionsScreen extends ConsumerWidget {
         await _downloadFromUrl(context, ref);
       case _AddSource.catalog:
         await _browseCatalog(context, ref);
+      case _AddSource.build:
+        await _requestBuild(context, ref);
       case null:
         break;
     }
@@ -277,7 +291,7 @@ class _RegionTile extends ConsumerWidget {
 
 enum _RegionAction { setActive, clearActive, delete }
 
-enum _AddSource { filePicker, url, catalog }
+enum _AddSource { filePicker, url, catalog, build }
 
 /// Add this method on `RegionsScreen` via extension below — keeps the
 /// main class file readable; the URL / catalog flows are noticeably
@@ -422,6 +436,173 @@ extension _RegionsScreenAddFlows on RegionsScreen {
       url: picked.url,
       filename: '${picked.id}.mbtiles',
     );
+  }
+
+  Future<void> _requestBuild(BuildContext context, WidgetRef ref) async {
+    final nameController = TextEditingController();
+    final bboxController = TextEditingController();
+    final descController = TextEditingController();
+    String maxzoom = '13';
+    String area = 'great-britain';
+    final formKey = GlobalKey<FormState>();
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Build a region'),
+        content: StatefulBuilder(
+          builder: (c, setLocal) => SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Name (filename, lower-case)',
+                      hintText: 'lake-district',
+                    ),
+                    validator: (v) {
+                      final t = v?.trim() ?? '';
+                      if (t.isEmpty) return 'Required';
+                      if (!RegExp(r'^[a-z0-9][a-z0-9._-]{0,63}$').hasMatch(t)) {
+                        return 'Lowercase letters, digits, . _ -';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: bboxController,
+                    decoration: const InputDecoration(
+                      labelText: 'bbox (minLon,minLat,maxLon,maxLat)',
+                      hintText: '-3.5,54.3,-2.7,54.8',
+                    ),
+                    validator: (v) {
+                      final t = v?.trim() ?? '';
+                      final parts = t.split(',');
+                      if (parts.length != 4) {
+                        return 'Need 4 comma-separated numbers';
+                      }
+                      for (final p in parts) {
+                        if (double.tryParse(p.trim()) == null) {
+                          return 'Each part must be a number';
+                        }
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: descController,
+                    decoration: const InputDecoration(
+                      labelText: 'Description (optional)',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: maxzoom,
+                          decoration: const InputDecoration(
+                            labelText: 'Max zoom',
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: '10', child: Text('10')),
+                            DropdownMenuItem(value: '11', child: Text('11')),
+                            DropdownMenuItem(value: '12', child: Text('12')),
+                            DropdownMenuItem(value: '13', child: Text('13')),
+                            DropdownMenuItem(value: '14', child: Text('14')),
+                          ],
+                          onChanged: (v) =>
+                              setLocal(() => maxzoom = v ?? '13'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: area,
+                          decoration: const InputDecoration(
+                            labelText: 'OSM area',
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'great-britain',
+                              child: Text('GB'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'europe/ireland-and-northern-ireland',
+                              child: Text('Ireland'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'europe',
+                              child: Text('Europe'),
+                            ),
+                          ],
+                          onChanged: (v) =>
+                              setLocal(() => area = v ?? 'great-britain'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() ?? false) {
+                Navigator.pop(c, true);
+              }
+            },
+            child: const Text('Build'),
+          ),
+        ],
+      ),
+    );
+    if (go != true) return;
+    if (!context.mounted) return;
+    try {
+      await GithubApi.dispatchRegionBuild(
+        name: nameController.text.trim(),
+        bbox: bboxController.text.trim(),
+        maxzoom: maxzoom,
+        area: area,
+        description: descController.text.trim(),
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 6),
+          content: Text(
+            'Build started for "${nameController.text.trim()}". '
+            'Check the catalog in ~10–20 min.',
+          ),
+        ),
+      );
+    } on GithubAuthMissingError {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No GitHub token. Settings → GitHub token to set one up.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Build dispatch failed: $e')),
+      );
+    }
   }
 
   Future<void> _runDownload({

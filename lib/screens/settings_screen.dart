@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 
 import '../db/database.dart';
 import '../db/keystore_key.dart';
+import '../services/github_api.dart';
+import '../services/github_pat_service.dart';
 import '../models/ping.dart';
 import '../providers/backup_provider.dart';
 import '../providers/home_location_provider.dart';
@@ -232,6 +234,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/regions'),
           ),
+          const _GithubPatTile(),
           const Divider(),
           const _SectionHeader('History'),
           ListTile(
@@ -906,6 +909,147 @@ class _BackupSetupDialogState extends ConsumerState<_BackupSetupDialog> {
               : const Text('Enable'),
         ),
       ],
+    );
+  }
+}
+
+/// Settings tile for the GitHub Personal Access Token used to fire
+/// `build-region.yml` from inside the app. Empty state shows
+/// "Not set"; populated state shows a masked preview + Replace/Clear
+/// actions; both states verify the token against /user when set so
+/// the user finds out about scope/expiry mistakes here, not at
+/// dispatch time.
+class _GithubPatTile extends StatefulWidget {
+  const _GithubPatTile();
+
+  @override
+  State<_GithubPatTile> createState() => _GithubPatTileState();
+}
+
+class _GithubPatTileState extends State<_GithubPatTile> {
+  String? _masked;
+  String _status = '';
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final pat = await GithubPatService.read();
+    if (!mounted) return;
+    setState(() {
+      _masked = pat == null ? null : GithubPatService.mask(pat);
+      _status = '';
+    });
+  }
+
+  Future<void> _setOrReplace() async {
+    final controller = TextEditingController();
+    final entered = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('GitHub token'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Used to fire `build-region.yml` against DazedDingo/trail. '
+              'Classic PAT with `public_repo` scope, or a fine-grained '
+              'token with Actions: Read & write on this repo.',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'PAT (ghp_… or github_pat_…)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (entered == null || entered.isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      await GithubPatService.write(entered);
+      final login = await GithubApi.verifyToken();
+      if (!mounted) return;
+      setState(() {
+        _masked = GithubPatService.mask(entered);
+        _status = 'Verified as @$login';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      // Don't strand a known-bad PAT in storage — wipe so the user
+      // can retry from a clean state.
+      await GithubPatService.clear();
+      setState(() {
+        _masked = null;
+        _status = 'Failed: $e';
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _clear() async {
+    await GithubPatService.clear();
+    if (!mounted) return;
+    setState(() {
+      _masked = null;
+      _status = 'Cleared';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.key_outlined),
+      title: const Text('GitHub token (build a region)'),
+      subtitle: Text(
+        _masked == null
+            ? (_status.isEmpty ? 'Not set' : _status)
+            : 'Set: $_masked${_status.isEmpty ? '' : ' · $_status'}',
+      ),
+      trailing: _busy
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Wrap(
+              spacing: 0,
+              children: [
+                if (_masked != null)
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Clear token',
+                    onPressed: _clear,
+                  ),
+                IconButton(
+                  icon: Icon(_masked == null ? Icons.add : Icons.edit),
+                  tooltip: _masked == null ? 'Set token' : 'Replace token',
+                  onPressed: _setOrReplace,
+                ),
+              ],
+            ),
     );
   }
 }

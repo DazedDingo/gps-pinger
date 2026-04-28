@@ -4,6 +4,13 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.8.3+52] — 2026-04-28
+
+### Added
+- **On-demand region builds via GitHub Actions.** New `.github/workflows/build-region.yml` accepts `workflow_dispatch` inputs (name, bbox, max zoom, OSM area, optional description), runs planetiler against the requested area, uploads the MBTiles as an asset on the `tilesets-v1` release, and commits a corresponding entry into `docs/tilesets.json` so the curated catalog picks it up automatically. Free for public repos (unlimited Actions minutes); typical small-area builds finish in ~5–15 min.
+- **App-side trigger.** Regions screen's "Add region" sheet now has a "Build a region" entry. Form takes name, bbox (`minLon,minLat,maxLon,maxLat`), zoom (10–14), OSM area (GB / Ireland / Europe), and an optional description. Submitting fires `POST /actions/workflows/build-region.yml/dispatches` against `DazedDingo/trail`.
+- **Settings → GitHub token.** Personal Access Token storage in flutter_secure_storage (`trail_github_pat_v1` key, same Keystore-backed encryption as the SQLCipher key). Tile shows `Set: ghp_…last4 · Verified as @login` when configured. Save calls `/user` to verify the token's scopes before persisting; a known-bad token is wiped from storage rather than silently stranded. Classic `public_repo` or fine-grained `Actions: Read & write` is enough.
+
 ## [0.8.2+51] — 2026-04-28
 
 ### Added
