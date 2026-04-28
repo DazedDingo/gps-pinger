@@ -14,6 +14,7 @@ import 'screens/map_screen.dart';
 import 'screens/passphrase_entry_screen.dart';
 import 'screens/regions_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/stats_screen.dart';
 import 'screens/lock_screen.dart';
 import 'screens/onboarding/onboarding_flow.dart';
 import 'theme/app_theme.dart';
@@ -81,7 +82,12 @@ final _routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/history', builder: (_, __) => const HistoryScreen()),
       GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
       GoRoute(path: '/contacts', builder: (_, __) => const ContactsScreen()),
-      GoRoute(path: '/map', builder: (_, __) => const MapScreen()),
+      GoRoute(
+        path: '/map',
+        builder: (_, state) =>
+            MapScreen(initialFilter: state.extra as DateTimeRange?),
+      ),
+      GoRoute(path: '/stats', builder: (_, __) => const StatsScreen()),
       GoRoute(path: '/regions', builder: (_, __) => const RegionsScreen()),
       GoRoute(path: '/archive', builder: (_, __) => const ArchiveScreen()),
       GoRoute(

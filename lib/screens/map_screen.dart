@@ -28,7 +28,13 @@ import '../services/trail_style.dart';
 /// slider's timestamp; dragging back rewinds the trail. Playback
 /// auto-advances one fix at a time at 1×/2×/4×/8×/16× speeds.
 class MapScreen extends ConsumerStatefulWidget {
-  const MapScreen({super.key});
+  /// Optional pre-applied filter — set when the screen is opened via
+  /// `context.push('/map', extra: DateTimeRange(...))` from elsewhere
+  /// (e.g. the stats screen's heatmap day-tap or trip card). The user
+  /// can still clear or change it from the calendar action.
+  final DateTimeRange? initialFilter;
+
+  const MapScreen({super.key, this.initialFilter});
 
   @override
   ConsumerState<MapScreen> createState() => _MapScreenState();
@@ -50,7 +56,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   /// ping ever logged". When set, the time slider's range and the
   /// rendered annotations are clamped to this window. Cleared by
   /// tapping the calendar icon → "Clear filter".
-  DateTimeRange? _dateFilter;
+  late DateTimeRange? _dateFilter = widget.initialFilter;
 
   /// Maps each rendered Circle annotation back to the underlying Ping
   /// row so taps can pop a detail sheet. Cleared on every

@@ -243,6 +243,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           ),
           const _GithubPatTile(),
           const Divider(),
+          const _SectionHeader('Insights'),
+          ListTile(
+            leading: const Icon(Icons.insights_outlined),
+            title: const Text('Stats'),
+            subtitle: const Text(
+              'Calendar heatmap, top places, time-of-day chart, '
+              'detected trips.',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/stats'),
+          ),
+          const Divider(),
           const _SectionHeader('History'),
           ListTile(
             leading: const Icon(Icons.archive_outlined),

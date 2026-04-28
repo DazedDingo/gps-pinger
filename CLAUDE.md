@@ -77,14 +77,18 @@ lib/
 │   ├── diagnostics_screen.dart  # Permission matrix, DB integrity-check button, last-20 worker runs, copy-all action. Shipped 0.6.0+15.
 │   ├── export_dialog.dart       # Date-range + format picker dialog (replaces home screen's two export buttons). Shipped 0.6.0+15.
 │   ├── home_location_screen.dart # Set home lat/lon/label: "use last fix" or manual form. Shipped 0.6.0+15.
-│   ├── settings_screen.dart     # Diagnostics (link), scheduling (mode toggle + events log), permissions, cloud-backup setup, panic duration, home location, history (archive), app version
+│   ├── stats_screen.dart        # Calendar heatmap + top places + time-of-day clock + detected trips. All four computations are pure functions in services/stats/stats_service.dart. Shipped 0.10.0+64.
+│   ├── settings_screen.dart     # Diagnostics (link), scheduling (mode toggle + events log), permissions, cloud-backup setup, panic duration, home location, history (archive), insights (stats), app version
 │   ├── contacts_screen.dart     # Emergency contacts CRUD (stored in encrypted DB)
 │   ├── lock_screen.dart         # Biometric/PIN unlock gate (pre-home)
 │   ├── passphrase_entry_screen.dart # Post-restore backup-passphrase unlock gate
 │   └── onboarding/              # First-run flow (permissions, emergency contacts)
 │       └── onboarding_flow.dart
 ├── widgets/
-│   └── trail_map.dart           # MapLibreMap + PolylineLayer/CircleLayer + recenter button (vector renderer, 0.8.0+29)
+│   ├── trail_map.dart           # MapLibreMap + PolylineLayer/CircleLayer + recenter button (vector renderer, 0.8.0+29)
+│   └── stats/
+│       ├── calendar_heatmap.dart # 12-week × 7-day GitHub-style cell grid, taps emit (day, count) up to the screen
+│       └── clock_chart.dart     # 24-bar radial via CustomPainter
 ├── theme/
 │   └── app_theme.dart           # Dark theme only (ThemeMode.dark explicit)
 ```

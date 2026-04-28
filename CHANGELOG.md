@@ -4,6 +4,16 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.10.0+64] — 2026-04-28
+
+### Added
+- **Stats screen** (Settings → Insights → Stats). Four derived views over the existing ping history, no schema change:
+  - **Calendar heatmap** — 12 weeks × 7 days of pings-per-local-day, GitHub-style intensity. Tap a day → opens the full map filtered to that day.
+  - **Top places** — pings bucketed on a ~1 km lat/lon grid, ranked by visit count, reverse-geocoded for a "Cambridge, England" label where the system geocoder cooperates.
+  - **Time of day** — 24-hour radial chart showing when in the day successful fixes happen, local time. `no_fix` rows are excluded so a phone with motion-aware-skip on still shows a useful pattern instead of a flat ring of stationary skips. Peak-hour summary line.
+  - **Trips** — automatic detection of stretches > 10 km from home for ≥ 6 h. Each trip card shows date span, max distance, ping count; tap to open the map filtered to the trip window.
+- **Map screen accepts an `initialFilter` extra.** `context.push('/map', extra: DateTimeRange(...))` opens the map with that filter pre-applied — used by the stats screen's heatmap and trip cards. Existing nav paths still pass `null` and behave as before.
+
 ## [0.9.6+63] — 2026-04-27
 
 ### Changed
