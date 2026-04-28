@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.8.3+54] — 2026-04-28
+
+### Fixed
+- **Full-map playback paused spuriously around duplicate timestamps.** `_stepTo` pivoted on the first ping with `ts >= current`, which returned a duplicate's own timestamp when two pings shared an exact `ts_utc` (panic burst, same-ms retry). The playback timer's `next.isAfter(current)` stop guard then fired and the user had to drag the slider past the dupe to resume. Now pivots on the **last** index ≤ `current`, so a forward step always lands on a strictly later index. Extracted to a top-level `stepSliderTo` so the regression is unit-tested (5 new tests, including a 5-deep duplicate-run case).
+
 ## [0.8.3+53] — 2026-04-28
 
 ### Changed

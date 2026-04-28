@@ -376,16 +376,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     ));
   }
 
-  /// Move the slider one ping forward / backward along `chrono`.
-  /// Discrete-per-ping (not per-millisecond) so step buttons always
-  /// advance the *visible trail* by exactly one marker, regardless of
-  /// gaps between pings.
-  DateTime _stepTo(List<Ping> chrono, DateTime current, int delta) {
-    final idx = chrono.indexWhere((p) => !p.timestampUtc.isBefore(current));
-    final effective = idx < 0 ? chrono.length - 1 : idx;
-    final target = (effective + delta).clamp(0, chrono.length - 1);
-    return chrono[target].timestampUtc;
-  }
+  /// Move the slider one ping forward / backward along `chrono`. Pure
+  /// dispatch to [stepSliderTo] — split out as a top-level so the
+  /// playback dupe-timestamp fix can be unit-tested without spinning
+  /// up a `MapLibreMap` (which `flutter_test` can't mount).
+  DateTime _stepTo(List<Ping> chrono, DateTime current, int delta) =>
+      stepSliderTo(chrono, current, delta);
 
   void _togglePlayback(List<Ping> chrono) {
     if (_playing) {
@@ -449,6 +445,28 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       }
     }
   }
+}
+
+/// Slider step logic — public so unit tests can hit it without a
+/// widget tree. See `_MapScreenState._stepTo` for context.
+///
+/// Pivots on the **last** index whose timestamp is at-or-before
+/// `current` (not the first one ≥ `current`). The earlier
+/// first-match version broke playback on duplicate `ts_utc` rows
+/// mid-trail (panic-burst pings, same-millisecond retries) — stepping
+/// forward returned the dupe's own timestamp, the playback loop's
+/// `next.isAfter(current)` guard fired, and the timer paused
+/// spuriously around the dupe. Pivoting on the last match means a
+/// forward step always lands on a strictly later index.
+DateTime stepSliderTo(List<Ping> chrono, DateTime current, int delta) {
+  if (chrono.isEmpty) return current;
+  var idx = 0;
+  for (var i = 0; i < chrono.length; i++) {
+    if (chrono[i].timestampUtc.isAfter(current)) break;
+    idx = i;
+  }
+  final target = (idx + delta).clamp(0, chrono.length - 1);
+  return chrono[target].timestampUtc;
 }
 
 class _TimeSlider extends StatelessWidget {
