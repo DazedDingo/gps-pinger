@@ -64,6 +64,15 @@ dependencies {
     // workmanager_android-0.9.0+2's transitive dep to avoid double-classpath
     // surprises.
     implementation("androidx.work:work-runtime-ktx:2.10.2")
+
+    // MapLibre Native Android — declared directly so MapLibreLogTrap.kt
+    // can reference `org.maplibre.android.log.{Logger,LoggerDefinition}`.
+    // maplibre_gl 0.26.0 already pulls this in as a transitive dep, but
+    // its `implementation` scope hides the classes from the app module's
+    // classpath. We add it as compileOnly here — the actual runtime
+    // resolution still goes through maplibre_gl + the resolutionStrategy
+    // override above (13.0.3-pre0).
+    compileOnly("org.maplibre.gl:android-sdk-opengl:13.0.+")
 }
 
 // Pin the maplibre-native Android SDK to the latest pre-release on top

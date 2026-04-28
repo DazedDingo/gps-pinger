@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.8.0+48] — 2026-04-28
+
+### Fixed
+- **+47 didn't build:** `MapLibreLogTrap.kt` couldn't see `org.maplibre.android.log.{Logger,LoggerDefinition}` because maplibre_gl declares the underlying maplibre-native AAR as `implementation`, not `api`. Added a `compileOnly` declaration in `android/app/build.gradle.kts` so the app module's Kotlin can reference the classes; runtime resolution still goes through maplibre_gl plus the existing 13.0.3-pre0 override.
+
 ## [0.8.0+47] — 2026-04-28
 
 ### Added
