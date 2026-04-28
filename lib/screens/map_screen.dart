@@ -611,7 +611,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _pathLine = await c.addLine(LineOptions(
         geometry: points,
         lineColor: scheme.primary.toHexStringRGB(),
-        lineWidth: 3,
+        lineWidth: 4,
         lineOpacity: 0.85,
       ));
     }
@@ -720,7 +720,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _pathLine = await c.addLine(LineOptions(
         geometry: points,
         lineColor: scheme.primary.toHexStringRGB(),
-        lineWidth: 3,
+        lineWidth: 4,
         lineOpacity: 0.85,
       ));
     }
@@ -737,7 +737,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _pathLine = await c.addLine(LineOptions(
         geometry: points,
         lineColor: scheme.primary.toHexStringRGB(),
-        lineWidth: 3,
+        lineWidth: 4,
         lineOpacity: 0.85,
       ));
     } else {
@@ -761,47 +761,44 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     return _smallOptions(points[i], scheme);
   }
 
+  // Pin sizes in this redesign sit subordinate to the trail line:
+  // earlier (3) < prev (5) < head (7) < line width (4 — visually
+  // wider since it's a stroke not a dot). The earlier-version sizes
+  // (4 / 10 / 11) competed with the line and dominated the screen
+  // on a phone at zoom 14. Down-scaled by ~40% across the board.
+
   CircleOptions _smallOptions(LatLng p, ColorScheme scheme) => CircleOptions(
         geometry: p,
-        circleRadius: 4,
+        circleRadius: 3,
         circleColor: scheme.primary.toHexStringRGB(),
-        circleStrokeWidth: 1,
+        circleStrokeWidth: 0.5,
         circleStrokeColor: '#FFFFFF',
-        circleStrokeOpacity: 0.85,
+        circleStrokeOpacity: 0.7,
       );
 
-  /// Hollow amber ring around the previous fix. Hollow + warm-tone +
-  /// large-radius is the loudest visual contrast available against
-  /// Trail's teal seed palette and the small filled-teal earlier
-  /// pins. The earlier `scheme.secondary` filled circle wasn't
-  /// distinct enough — secondary in the M3 dark theme derives from
-  /// the same teal seed as primary and read identical at a glance.
+  /// Filled amber dot (no longer a ring) at radius 5 — the warm
+  /// hue is what makes it read as "previous", not the size or
+  /// stroke. Hollow rings at radius 10 worked semantically but
+  /// dominated the visual real estate.
   CircleOptions _prevOptions(LatLng p, ColorScheme scheme) => CircleOptions(
         geometry: p,
-        circleRadius: 10,
-        // Hollow — fill is invisible. The amber stroke is what you
-        // see. Setting opacity rather than `transparent` because the
-        // platform side parses hex more reliably than named colors.
+        circleRadius: 5,
         circleColor: '#FFB300',
-        circleOpacity: 0,
-        circleStrokeWidth: 3,
-        circleStrokeColor: '#FFB300',
-        circleStrokeOpacity: 1.0,
+        circleStrokeWidth: 1,
+        circleStrokeColor: '#FFFFFF',
+        circleStrokeOpacity: 0.95,
       );
 
-  /// Red Accent 400 — vivid magenta-red that pops against both the
-  /// teal small pins and the amber previous ring, regardless of the
-  /// underlying tile palette (forest / city / wilderness all read
-  /// the same against this hue). Replaces `scheme.tertiary`, which
-  /// derives a muted warm tone from the teal seed and washed out
-  /// against the small pins.
+  /// Material Red Accent 400 (`#FF1744`) — vivid red that reads
+  /// cleanly on any tile palette. Radius 7 (down from 11) so it's
+  /// distinct without swallowing the trail.
   static const _headFill = '#FF1744';
 
   CircleOptions _headOptions(LatLng p, ColorScheme scheme) => CircleOptions(
         geometry: p,
-        circleRadius: 11,
+        circleRadius: 7,
         circleColor: _headFill,
-        circleStrokeWidth: 2,
+        circleStrokeWidth: 1.5,
         circleStrokeColor: '#FFFFFF',
         circleStrokeOpacity: 0.95,
       );
@@ -1223,10 +1220,10 @@ class _PlaybackHud extends StatelessWidget {
   Widget build(BuildContext context) {
     final fmt = DateFormat('MMM d HH:mm');
     return Material(
-      color: Colors.black.withValues(alpha: 0.55),
-      borderRadius: BorderRadius.circular(8),
+      color: Colors.black.withValues(alpha: 0.6),
+      borderRadius: BorderRadius.circular(6),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -1235,38 +1232,35 @@ class _PlaybackHud extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _Dot(color: const Color(0xFFFF1744)),
-                const SizedBox(width: 6),
+                const SizedBox(width: 5),
                 Text(
-                  'Now ${fmt.format(current.timestampUtc.toLocal())}',
+                  fmt.format(current.timestampUtc.toLocal()),
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
-            if (previous != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Match the amber hollow-ring style on the map's
-                    // previous pin so the legend is visually obvious.
-                    _Dot(color: const Color(0xFFFFB300)),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Prev ${fmt.format(previous!.timestampUtc.toLocal())} · '
-                      '${_humanGap(current.timestampUtc.difference(previous!.timestampUtc))}',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontSize: 11,
-                      ),
+            if (previous != null) ...[
+              const SizedBox(height: 1),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _Dot(color: const Color(0xFFFFB300)),
+                  const SizedBox(width: 5),
+                  Text(
+                    '${fmt.format(previous!.timestampUtc.toLocal())} · '
+                    '${_humanGap(current.timestampUtc.difference(previous!.timestampUtc))}',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.78),
+                      fontSize: 10,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+            ],
           ],
         ),
       ),
@@ -1292,8 +1286,8 @@ class _Dot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 8,
-      height: 8,
+      width: 6,
+      height: 6,
       decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }

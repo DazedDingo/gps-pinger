@@ -4,6 +4,12 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.10.6+70] — 2026-04-28
+
+### Changed
+- **Map overlay rebalanced — line is the hero, pins are accents.** The previous build's pins (head 11, prev hollow ring 10, small 4) competed with the trail line and dominated the screen at zoom 14. Pin radii dropped to head 7 / prev 5 (now a filled amber dot, not a ring) / small 3. Line width nudged from 3 → 4 so the trail itself reads as the visual primary. Stroke widths and opacities scaled to match.
+- **HUD compacted.** Translucent timestamp panel in the top-left now uses smaller fonts (11/10 vs 12/11), tighter padding (8×4 vs 10×6), 6 px legend dots (vs 8), and drops the "Now"/"Prev" word prefixes — the colored dot already encodes which row is which. Half the prior footprint.
+
 ## [0.10.5+69] — 2026-04-28
 
 ### Added
