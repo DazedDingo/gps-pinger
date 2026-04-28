@@ -20,11 +20,9 @@ void main() {
       expect(out, isNot(contains('__TRAIL_ACTIVE_REGION__')));
     });
 
-    test('MBTiles paths use bare mbtiles:// scheme (no file:// inner)', () {
-      // MapLibre's MBTiles file source strips `mbtiles://` and reads
-      // the rest as an absolute path directly — *not* layered on top of
-      // `file://` like PMTiles. Adding `file://` here would break the
-      // resolver, mirroring the PMTiles bug in reverse.
+    test('MBTiles paths fall back to bare mbtiles:// when no port given', () {
+      // No tile-server port = the broken native path; kept for
+      // parity in case the upstream fix lands.
       const raw = '"url": "pmtiles://__TRAIL_ACTIVE_REGION__"';
       const path = '/data/user/0/com.dazeddingo.trail/files/tiles/gb.mbtiles';
 
@@ -35,8 +33,35 @@ void main() {
         contains('mbtiles:///data/user/0/com.dazeddingo.trail/'
             'files/tiles/gb.mbtiles'),
       );
-      expect(out, isNot(contains('file://')));
       expect(out, isNot(contains('__TRAIL_ACTIVE_REGION__')));
+    });
+
+    test('MBTiles paths route through the localhost loopback when port set',
+        () {
+      // 0.8.0+40 workaround: native local-file rendering broken on
+      // Android, so the active MBTiles is served via LocalTileServer
+      // and MapLibre fetches as a regular HTTP source.
+      const raw = '"url": "pmtiles://__TRAIL_ACTIVE_REGION__"';
+      final out = TrailStyle.substituteRegionPath(
+        raw,
+        '/x/gb.mbtiles',
+        tileServerPort: 8327,
+      );
+      expect(out, contains('http://127.0.0.1:8327/tilejson.json'));
+      expect(out, isNot(contains('mbtiles://')));
+      expect(out, isNot(contains('__TRAIL_ACTIVE_REGION__')));
+    });
+
+    test('PMTiles paths ignore the tile-server port (server only handles '
+        'MBTiles)', () {
+      const raw = '"url": "pmtiles://__TRAIL_ACTIVE_REGION__"';
+      final out = TrailStyle.substituteRegionPath(
+        raw,
+        '/x/gb.pmtiles',
+        tileServerPort: 8327,
+      );
+      expect(out, contains('pmtiles://file:///x/gb.pmtiles'));
+      expect(out, isNot(contains('http://127.0.0.1')));
     });
 
     test('extension match is case-insensitive', () {

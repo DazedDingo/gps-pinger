@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Allows cleartext HTTP only to 127.0.0.1 (the localhost loopback used
+  by `LocalTileServer` to serve MBTiles tiles to MapLibre Native, since
+  the native `mbtiles://file://` and `pmtiles://file://` paths silently
+  fail to render on Android in maplibre-native 13.0.x).
+
+  Everything else stays HTTPS-only by Android's default policy. The
+  base config below preserves cleartext rejection for non-loopback
+  hosts.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

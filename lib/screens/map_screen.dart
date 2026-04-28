@@ -9,6 +9,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import '../models/ping.dart';
 import '../providers/mbtiles_provider.dart';
 import '../providers/pings_provider.dart';
+import '../providers/tile_server_provider.dart';
 import '../services/mbtiles_service.dart';
 import '../services/trail_style.dart';
 
@@ -37,6 +38,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   MapLibreMapController? _controller;
   Future<String?>? _styleFuture;
   String? _activeRegionPath;
+  int? _tileServerPort;
   bool _styleReady = false;
 
   bool _showPath = true;
@@ -65,11 +67,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   Widget build(BuildContext context) {
     final pingsAsync = ref.watch(allPingsProvider);
     final activeRegion = ref.watch(activeRegionProvider).valueOrNull;
+    final tileServerPort = ref.watch(tileServerProvider).valueOrNull;
 
-    if (activeRegion?.path != _activeRegionPath) {
+    final regionChanged = activeRegion?.path != _activeRegionPath;
+    final portChanged = tileServerPort != _tileServerPort;
+    if (regionChanged || portChanged || _styleFuture == null) {
       _activeRegionPath = activeRegion?.path;
-      _styleFuture = TrailStyle.loadForRegion(_activeRegionPath);
-      _initialFitDone = false;
+      _tileServerPort = tileServerPort;
+      _styleFuture = TrailStyle.loadForRegion(
+        _activeRegionPath,
+        tileServerPort: tileServerPort,
+      );
+      if (regionChanged) _initialFitDone = false;
       _styleReady = false;
     }
 

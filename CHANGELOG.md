@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.8.0+40] — 2026-04-28
+
+### Added
+- **In-app localhost HTTP server for MBTiles tiles.** Working around the maplibre-native 13.0.x bug where local-file tile URLs (`mbtiles://file://`, `pmtiles://file://`) silently fail to render on Android even when the file is present and the style parses. `LocalTileServer` opens the active `.mbtiles` read-only via sqflite, binds an HTTP listener on `127.0.0.1` at a random port, and serves `/tilejson.json` and `/{z}/{x}/{y}.pbf` (with the TMS→XYZ y-flip baked into the handler). MapLibre fetches as a regular remote vector source — the path we already proved works in 0.8.0+35's diagnostic mode. AndroidManifest gets a `network_security_config.xml` that whitelists cleartext HTTP for `127.0.0.1` and `localhost` only; everything else stays HTTPS-only.
+
 ## [0.8.0+39] — 2026-04-27
 
 ### Changed

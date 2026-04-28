@@ -2,9 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../models/ping.dart';
+import '../providers/tile_server_provider.dart';
 import '../services/mbtiles_service.dart';
 import '../services/trail_style.dart';
 
@@ -20,7 +22,7 @@ import '../services/trail_style.dart';
 /// The app is offline-only: when no region is installed the widget
 /// shows an "install a region" placeholder instead of mounting the
 /// map.
-class TrailMap extends StatefulWidget {
+class TrailMap extends ConsumerStatefulWidget {
   final List<Ping> pings;
   final double height;
   final TilesRegion? activeRegion;
@@ -33,27 +35,29 @@ class TrailMap extends StatefulWidget {
   });
 
   @override
-  State<TrailMap> createState() => _TrailMapState();
+  ConsumerState<TrailMap> createState() => _TrailMapState();
 }
 
-class _TrailMapState extends State<TrailMap> {
+class _TrailMapState extends ConsumerState<TrailMap> {
   MapLibreMapController? _controller;
   Future<String?>? _styleFuture;
   bool _styleReady = false;
   String _lastEvent = 'mounting…';
+  int? _tileServerPort;
 
   @override
   void initState() {
     super.initState();
-    _styleFuture = TrailStyle.loadForRegion(widget.activeRegion?.path);
+    // Style is rebuilt in `build` once we have the tile-server port —
+    // can't synchronously read providers in initState.
   }
 
   @override
   void didUpdateWidget(covariant TrailMap oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.activeRegion?.path != widget.activeRegion?.path) {
-      _styleFuture = TrailStyle.loadForRegion(widget.activeRegion?.path);
       _styleReady = false;
+      _styleFuture = null; // rebuilt in build()
     }
     final oldFixes = _fixesOf(oldWidget.pings);
     final newFixes = _fixesOf(widget.pings);
@@ -162,6 +166,19 @@ class _TrailMapState extends State<TrailMap> {
             'Install an offline map region to see your trail. '
             'Settings → Offline map → Regions.',
       );
+    }
+
+    // Wait for the tile server to bind its port before loading the style;
+    // otherwise we'd substitute `mbtiles://<path>` (the broken native form)
+    // and the map would render empty even though the workaround is live.
+    final port = ref.watch(tileServerProvider).valueOrNull;
+    if (_tileServerPort != port || _styleFuture == null) {
+      _tileServerPort = port;
+      _styleFuture = TrailStyle.loadForRegion(
+        widget.activeRegion!.path,
+        tileServerPort: port,
+      );
+      _styleReady = false;
     }
 
     return Container(

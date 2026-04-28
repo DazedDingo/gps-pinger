@@ -59,11 +59,13 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
 
-    <!-- Trail-map viewer pulls OpenStreetMap raster tiles over HTTPS. The
-         logging pipeline itself never touches the network — only the
-         history visualisation does. Offline devices fall back to the
-         flutter_map cached-tile layer; the app stays fully usable for
-         logging, export, and reading raw coordinates. -->
+    <!-- Trail-map viewer needs INTERNET because the localhost HTTP loopback
+         used to feed MBTiles to MapLibre Native (workaround for the
+         broken `mbtiles://file://` and `pmtiles://file://` paths in
+         maplibre-native 13.0.x on Android) requires the
+         `android.permission.INTERNET` permission to bind a server
+         socket on the loopback interface. The logging pipeline itself
+         still never touches the network. -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
     <application
@@ -72,7 +74,8 @@
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"
-        android:dataExtractionRules="@xml/data_extraction_rules">
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:networkSecurityConfig="@xml/network_security_config">
 
         <activity
             android:name=".MainActivity"
