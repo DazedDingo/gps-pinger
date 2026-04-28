@@ -9,6 +9,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../models/ping.dart';
 import '../providers/tile_server_provider.dart';
+import '../services/local_tile_server.dart';
 import '../services/mbtiles_service.dart';
 import '../services/trail_style.dart';
 
@@ -286,6 +287,7 @@ class _DiagnosticOverlay extends StatefulWidget {
 
 class _DiagnosticOverlayState extends State<_DiagnosticOverlay> {
   String _serverPing = '?';
+  Timer? _refreshTimer;
 
   static String _pathTail(String path) {
     if (path.length <= 60) return path;
@@ -296,6 +298,19 @@ class _DiagnosticOverlayState extends State<_DiagnosticOverlay> {
   void initState() {
     super.initState();
     _runServerPing();
+    // Poll the LocalTileServer counters every 2s so the user can
+    // pan the map and watch `tileReqs` and `lastTile` update — vital
+    // for telling apart "MapLibre never asked the server" from
+    // "MapLibre asked but the response was rejected".
+    _refreshTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -338,10 +353,14 @@ class _DiagnosticOverlayState extends State<_DiagnosticOverlay> {
   Widget build(BuildContext context) {
     final exists = File(widget.regionPath).existsSync();
     final portText = widget.tileServerPort?.toString() ?? 'off';
+    final reqs = LocalTileServer.instance.tileRequestCount;
+    final lastStatus = LocalTileServer.instance.lastTileStatus;
     final dump = 'last: ${widget.lastEvent}\n'
         'fileExists: $exists\n'
         'tileServerPort: $portText\n'
         'serverPing: $_serverPing\n'
+        'tileReqs: $reqs\n'
+        'lastTile: $lastStatus\n'
         'path: ${widget.regionPath}';
     return Material(
       color: Colors.transparent,
@@ -381,13 +400,18 @@ class _DiagnosticOverlayState extends State<_DiagnosticOverlay> {
                   'serverPing: $_serverPing',
                   overflow: TextOverflow.ellipsis,
                 ),
+                Text('tileReqs: $reqs'),
+                Text(
+                  'lastTile: $lastStatus',
+                  overflow: TextOverflow.ellipsis,
+                ),
                 Text(
                   'tail: …${_pathTail(widget.regionPath)}',
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 const Text(
-                  '(tap = copy · long-press = retest)',
+                  '(tap = copy · long-press = retest+refresh)',
                   style: TextStyle(
                     fontSize: 10,
                     color: Colors.white70,

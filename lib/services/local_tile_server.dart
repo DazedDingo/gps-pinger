@@ -30,12 +30,21 @@ class LocalTileServer {
   Database? _db;
   Map<String, dynamic> _metadata = const {};
   String? _activePath;
+  int _tileRequestCount = 0;
+  String _lastTileStatus = '—';
 
   /// Returns the bound port, or `null` if the server isn't running.
   int? get port => _server?.port;
 
   /// Returns the path of the MBTiles currently being served.
   String? get activePath => _activePath;
+
+  /// Number of /{z}/{x}/{y}.pbf requests received since `start`.
+  int get tileRequestCount => _tileRequestCount;
+
+  /// Last tile-request status, e.g. "z=13 x=4011 y=2702 → 200 (78B)" or
+  /// "404" or "503: db closed".
+  String get lastTileStatus => _lastTileStatus;
 
   /// Starts (or restarts) the server pointing at [mbtilesPath]. Idempotent
   /// when called with the same path. Returns the bound port.
@@ -48,6 +57,8 @@ class LocalTileServer {
     _metadata = await _readMetadata(_db!);
     _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     _activePath = mbtilesPath;
+    _tileRequestCount = 0;
+    _lastTileStatus = '—';
     _server!.listen(_handle, onError: (Object _) {});
     return _server!.port;
   }
@@ -157,8 +168,10 @@ class LocalTileServer {
   }
 
   Future<void> _serveTile(HttpRequest req, int z, int x, int y) async {
+    _tileRequestCount++;
     final db = _db;
     if (db == null) {
+      _lastTileStatus = 'z=$z x=$x y=$y → 503 (db closed)';
       req.response.statusCode = HttpStatus.serviceUnavailable;
       await req.response.close();
       return;
@@ -167,32 +180,48 @@ class LocalTileServer {
     // requests with XYZ (origin at north). Flip y here so we can keep
     // the simpler XYZ scheme on the wire.
     final tmsY = (1 << z) - 1 - y;
-    final rows = await db.query(
-      'tiles',
-      columns: ['tile_data'],
-      where: 'zoom_level = ? AND tile_column = ? AND tile_row = ?',
-      whereArgs: [z, x, tmsY],
-      limit: 1,
-    );
+    final List<Map<String, Object?>> rows;
+    try {
+      rows = await db.query(
+        'tiles',
+        columns: ['tile_data'],
+        where: 'zoom_level = ? AND tile_column = ? AND tile_row = ?',
+        whereArgs: [z, x, tmsY],
+        limit: 1,
+      );
+    } catch (e) {
+      _lastTileStatus = 'z=$z x=$x y=$y → 500 ($e)';
+      req.response.statusCode = HttpStatus.internalServerError;
+      await req.response.close();
+      return;
+    }
     if (rows.isEmpty) {
+      _lastTileStatus = 'z=$z x=$x y=$y → 404 (no tile)';
       req.response.statusCode = HttpStatus.notFound;
       await req.response.close();
       return;
     }
     final blob = rows.first['tile_data'];
     if (blob is! List<int>) {
+      _lastTileStatus = 'z=$z x=$x y=$y → 404 (bad blob)';
       req.response.statusCode = HttpStatus.notFound;
       await req.response.close();
       return;
     }
     req.response.headers.contentType =
         ContentType('application', 'x-protobuf');
-    // Planetiler-emitted MVT blobs are gzip-compressed; MapLibre expects
-    // either raw or properly-marked Content-Encoding.
-    req.response.headers.set('Content-Encoding', 'gzip');
+    // Planetiler-emitted MVT blobs are gzip-compressed at rest. We do
+    // *not* set `Content-Encoding: gzip` — that would make Android's
+    // OkHttp transparently decompress, but maplibre-native then tries
+    // to gzip-decompress the *already-decompressed* bytes (it sniffs
+    // the magic itself per spec) and fails to parse. Sending the raw
+    // gzipped bytes without the header keeps OkHttp's hands off and
+    // lets maplibre-native decompress once.
     req.response.headers.set('Cache-Control', 'no-cache');
+    req.response.headers.contentLength = blob.length;
     req.response.add(blob);
     await req.response.close();
+    _lastTileStatus = 'z=$z x=$x y=$y → 200 (${blob.length}B)';
   }
 
   static final RegExp _tilePathRegex =
