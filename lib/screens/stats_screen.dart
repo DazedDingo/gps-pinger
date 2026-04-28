@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../providers/home_location_provider.dart';
 import '../providers/pings_provider.dart';
+import '../providers/stats_provider.dart';
 import '../services/stats/stats_service.dart';
 import '../widgets/stats/calendar_heatmap.dart';
 import '../widgets/stats/clock_chart.dart';
@@ -64,12 +65,11 @@ class StatsScreen extends ConsumerWidget {
               const SizedBox(height: 28),
               _Header(
                 'Top places',
-                'Pings grouped on a ~1 km grid. Most-visited first.',
+                'Pings grouped on a ~1 km grid then merged by place '
+                'name. Most-visited first.',
               ),
               const SizedBox(height: 8),
-              _TopPlacesList(
-                buckets: StatsService.topPlaces(pings),
-              ),
+              const _TopPlacesList(),
               const SizedBox(height: 28),
               _Header(
                 'Time of day',
@@ -168,48 +168,60 @@ class _NoHomeForTrips extends ConsumerWidget {
 }
 
 class _TopPlacesList extends ConsumerWidget {
-  final List<PlaceBucket> buckets;
-  const _TopPlacesList({required this.buckets});
+  const _TopPlacesList();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (buckets.isEmpty) {
-      return _smallEmpty(context, 'No fixes with coordinates yet.');
-    }
-    final maxCount = buckets.first.count;
-    return Column(
-      children: [
-        for (var i = 0; i < buckets.length; i++)
-          _TopPlaceTile(
-            rank: i + 1,
-            bucket: buckets[i],
-            maxCount: maxCount,
+    final ranked = ref.watch(topPlacesProvider);
+    return ranked.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
           ),
-      ],
+        ),
+      ),
+      error: (e, _) => _smallEmpty(context, 'Couldn\'t compute top places: $e'),
+      data: (places) {
+        if (places.isEmpty) {
+          return _smallEmpty(context, 'No fixes with coordinates yet.');
+        }
+        final maxCount = places.first.count;
+        return Column(
+          children: [
+            for (var i = 0; i < places.length; i++)
+              _TopPlaceTile(
+                rank: i + 1,
+                place: places[i],
+                maxCount: maxCount,
+              ),
+          ],
+        );
+      },
     );
   }
 }
 
-class _TopPlaceTile extends ConsumerWidget {
+class _TopPlaceTile extends StatelessWidget {
   final int rank;
-  final PlaceBucket bucket;
+  final RankedPlace place;
   final int maxCount;
 
   const _TopPlaceTile({
     required this.rank,
-    required this.bucket,
+    required this.place,
     required this.maxCount,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final geoAsync = ref.watch(
-      approxLocationProvider((lat: bucket.lat, lon: bucket.lon)),
-    );
     final coords =
-        '${bucket.lat.toStringAsFixed(3)}, ${bucket.lon.toStringAsFixed(3)}';
-    final fraction = maxCount == 0 ? 0.0 : bucket.count / maxCount;
+        '${place.lat.toStringAsFixed(3)}, ${place.lon.toStringAsFixed(3)}';
+    final fraction = maxCount == 0 ? 0.0 : place.count / maxCount;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -228,13 +240,9 @@ class _TopPlaceTile extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                geoAsync.when(
-                  loading: () => Text(coords, style: theme.textTheme.bodyMedium),
-                  error: (_, __) => Text(coords, style: theme.textTheme.bodyMedium),
-                  data: (label) => Text(
-                    label ?? coords,
-                    style: theme.textTheme.bodyMedium,
-                  ),
+                Text(
+                  place.label ?? coords,
+                  style: theme.textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 4),
                 ClipRRect(
@@ -250,7 +258,7 @@ class _TopPlaceTile extends ConsumerWidget {
           ),
           const SizedBox(width: 12),
           Text(
-            '${bucket.count}',
+            '${place.count}',
             style: theme.textTheme.labelLarge,
           ),
         ],

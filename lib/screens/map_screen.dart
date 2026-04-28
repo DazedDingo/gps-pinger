@@ -71,6 +71,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   static const _heatmapSourceId = 'trail-heatmap-src';
   static const _heatmapLayerId = 'trail-heatmap-lyr';
 
+  /// State of the most recent path-mode render. The slider value
+  /// changes faster than maplibre_gl's annotation channel can clear
+  /// + re-add hundreds of circles, so playback at high ping counts
+  /// went choppy. Tracking these refs lets the next refresh decide
+  /// between "incremental: add the new circles + nudge the old head"
+  /// (cheap) or "different filter / mode / backward step: full
+  /// rebuild" (expensive). Reset on style swap or mode change.
+  List<Ping>? _renderedPathFixes;
+  Line? _pathLine;
+  Circle? _pathHead;
+  String? _pathRenderKey;
+
   /// Playback: advances `_sliderMax` one ping at a time until it reaches
   /// the last fix, then auto-pauses. Step interval = `_basePlaybackStep
   /// / _playbackSpeed`, so 1× shows each ping for ~350ms, 4× for ~90ms,
@@ -114,6 +126,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       // exist there.
       _heatmapMounted = false;
       _circleToPing.clear();
+      _renderedPathFixes = null;
+      _pathLine = null;
+      _pathHead = null;
+      _pathRenderKey = null;
     }
 
     return Scaffold(
@@ -417,43 +433,100 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _refreshAnnotations(visible, Theme.of(context).colorScheme);
   }
 
-  /// Clears existing line/circle annotations and re-adds for the
-  /// current visibility flags. We use clear+add (rather than a
-  /// GeoJsonSource that we update in place) because the slider drives
-  /// a fairly small number of points (~weeks of 4h pings = 42–500
-  /// fixes); the perf cost is invisible at that scale and the code is
-  /// substantially simpler. If the app ever stores 10k+ pings, swap to
-  /// `setGeoJsonSource` against a single source.
+  /// Render visible fixes onto the map. For path-mode playback (slider
+  /// monotonically advancing), this short-circuits to an incremental
+  /// path: add only the new circles, demote the old "head" circle to
+  /// the small style, and update the line geometry — three platform
+  /// channel calls instead of one-clear + N-add.
+  ///
+  /// Falls back to a full clear+rebuild whenever the *render key*
+  /// changes (heatmap toggle, path-line toggle, date filter), or the
+  /// user steps backward (visibleFixes shrinks). Backward steps are
+  /// rare and a one-shot user action, so a 100-call rebuild there is
+  /// acceptable.
   Future<void> _refreshAnnotations(
     List<Ping> visibleFixes,
     ColorScheme scheme,
   ) async {
     final c = _controller;
     if (c == null) return;
-    await c.clearLines();
-    await c.clearCircles();
-    _circleToPing.clear();
+    final mode = _showHeatmap ? 'heatmap' : 'path';
+    final renderKey = '$mode|${_dateFilter?.start}|${_dateFilter?.end}'
+        '|$_showPath';
+    final renderKeyChanged = renderKey != _pathRenderKey;
+
+    if (renderKeyChanged) {
+      // Mode / filter / toggle changed — drop everything we know
+      // about the platform-side annotations and rebuild.
+      await c.clearLines();
+      await c.clearCircles();
+      _circleToPing.clear();
+      _renderedPathFixes = null;
+      _pathLine = null;
+      _pathHead = null;
+      _pathRenderKey = renderKey;
+    }
+
     if (visibleFixes.isEmpty) {
       await _setHeatmap(c, false, const [], scheme);
       return;
     }
-    final points = visibleFixes
-        .map((p) => LatLng(p.lat!, p.lon!))
-        .toList(growable: false);
 
     if (_showHeatmap) {
-      // Real maplibre-native heatmap layer driven by a GeoJSON source.
-      // Replaces the pre-0.9.1 per-ping CircleLayer fudge — proper
-      // density-weighted Gaussian blending, scales to thousands of
-      // fixes without a thousand annotations on the platform side.
+      // Heatmap mode is already a single setGeoJsonSource call per
+      // refresh — don't touch the path-mode bookkeeping here.
       await _setHeatmap(c, true, visibleFixes, scheme);
       return;
     }
 
     await _setHeatmap(c, false, const [], scheme);
 
+    final prev = _renderedPathFixes;
+    final canIncrement = !renderKeyChanged &&
+        prev != null &&
+        visibleFixes.length > prev.length &&
+        identical(prev.first, visibleFixes.first) &&
+        identical(prev.last, visibleFixes[prev.length - 1]);
+
+    if (prev != null &&
+        !renderKeyChanged &&
+        visibleFixes.length == prev.length &&
+        identical(prev.last, visibleFixes.last)) {
+      // sliderMax tick that didn't change the visible window (e.g.
+      // landed inside a duplicate-timestamp run). No platform work
+      // needed.
+      return;
+    }
+
+    if (canIncrement) {
+      await _renderPathIncremental(c, visibleFixes, prev.length, scheme);
+    } else {
+      await _renderPathFromScratch(c, visibleFixes, scheme);
+    }
+    _renderedPathFixes = visibleFixes;
+  }
+
+  /// Full clear+rebuild of the path-mode annotations. Called on
+  /// render-key change, backward step, or first render. Also resets
+  /// the head/line refs so the next incremental call has fresh
+  /// anchors.
+  Future<void> _renderPathFromScratch(
+    MapLibreMapController c,
+    List<Ping> visibleFixes,
+    ColorScheme scheme,
+  ) async {
+    await c.clearLines();
+    await c.clearCircles();
+    _circleToPing.clear();
+    _pathLine = null;
+    _pathHead = null;
+
+    final points = visibleFixes
+        .map((p) => LatLng(p.lat!, p.lon!))
+        .toList(growable: false);
+
     if (_showPath && points.length >= 2) {
-      await c.addLine(LineOptions(
+      _pathLine = await c.addLine(LineOptions(
         geometry: points,
         lineColor: scheme.primary.toHexStringRGB(),
         lineWidth: 3,
@@ -461,26 +534,87 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       ));
     }
     for (var i = 0; i < points.length - 1; i++) {
-      final circle = await c.addCircle(CircleOptions(
-        geometry: points[i],
+      final circle = await c.addCircle(_smallCircleOptions(points[i], scheme));
+      _circleToPing[circle.id] = visibleFixes[i];
+    }
+    _pathHead = await c.addCircle(_headCircleOptions(points.last, scheme));
+    _circleToPing[_pathHead!.id] = visibleFixes.last;
+  }
+
+  /// Add only the delta circles since the last render, demote the
+  /// previous head to small, and update the line geometry. Three
+  /// platform calls (line update + demote + add new head) plus one
+  /// addCircle per intermediate fix added — usually one when called
+  /// from the playback timer at 1× speed.
+  Future<void> _renderPathIncremental(
+    MapLibreMapController c,
+    List<Ping> visibleFixes,
+    int oldLength,
+    ColorScheme scheme,
+  ) async {
+    final newLength = visibleFixes.length;
+    final points = visibleFixes
+        .map((p) => LatLng(p.lat!, p.lon!))
+        .toList(growable: false);
+
+    // Demote the previous head to a small circle in place.
+    final oldHead = _pathHead;
+    if (oldHead != null) {
+      await c.updateCircle(
+        oldHead,
+        _smallCircleOptions(points[oldLength - 1], scheme),
+      );
+    }
+
+    // Add small circles for any intermediate fixes that landed
+    // between the old head and the new head (delta > 1).
+    for (var i = oldLength; i < newLength - 1; i++) {
+      final circle =
+          await c.addCircle(_smallCircleOptions(points[i], scheme));
+      _circleToPing[circle.id] = visibleFixes[i];
+    }
+
+    // Add the new head.
+    final head = await c.addCircle(_headCircleOptions(points.last, scheme));
+    _circleToPing[head.id] = visibleFixes.last;
+    _pathHead = head;
+
+    // Update the line geometry. If the line didn't exist yet (we
+    // crossed the 2-point threshold this tick), add it; otherwise
+    // updateLine is one platform call and replaces just geometry.
+    if (_showPath) {
+      if (_pathLine == null && points.length >= 2) {
+        _pathLine = await c.addLine(LineOptions(
+          geometry: points,
+          lineColor: scheme.primary.toHexStringRGB(),
+          lineWidth: 3,
+          lineOpacity: 0.85,
+        ));
+      } else if (_pathLine != null) {
+        await c.updateLine(_pathLine!, LineOptions(geometry: points));
+      }
+    }
+  }
+
+  CircleOptions _smallCircleOptions(LatLng p, ColorScheme scheme) =>
+      CircleOptions(
+        geometry: p,
         circleRadius: 4,
         circleColor: scheme.primary.toHexStringRGB(),
         circleStrokeWidth: 1,
         circleStrokeColor: '#FFFFFF',
         circleStrokeOpacity: 0.85,
-      ));
-      _circleToPing[circle.id] = visibleFixes[i];
-    }
-    final lastCircle = await c.addCircle(CircleOptions(
-      geometry: points.last,
-      circleRadius: 8,
-      circleColor: scheme.tertiary.toHexStringRGB(),
-      circleStrokeWidth: 2,
-      circleStrokeColor: '#FFFFFF',
-      circleStrokeOpacity: 0.95,
-    ));
-    _circleToPing[lastCircle.id] = visibleFixes.last;
-  }
+      );
+
+  CircleOptions _headCircleOptions(LatLng p, ColorScheme scheme) =>
+      CircleOptions(
+        geometry: p,
+        circleRadius: 8,
+        circleColor: scheme.tertiary.toHexStringRGB(),
+        circleStrokeWidth: 2,
+        circleStrokeColor: '#FFFFFF',
+        circleStrokeOpacity: 0.95,
+      );
 
   /// Mount or unmount the heatmap source + layer. Idempotent — checks
   /// `_heatmapMounted` so a no-op call doesn't fight the platform side.

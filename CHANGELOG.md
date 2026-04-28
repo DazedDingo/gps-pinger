@@ -4,6 +4,12 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.10.1+65] — 2026-04-28
+
+### Fixed
+- **Map playback was choppy with hundreds of fixes.** `_refreshAnnotations` always cleared every line + circle and re-added them on each playback tick — N+3 platform-channel calls per tick where N = visible fix count. At 30-min cadence on a busy day that's hundreds of calls per 350 ms, more than the maplibre_gl annotation pipeline could process. Now the path-mode renderer keeps refs to the line + head-circle and short-circuits to an *incremental* update on forward-only slider advances: demote old head to small (1 call), add new circles for any intermediate fixes (≥0 calls), add new head (1 call), `updateLine` with the new geometry (1 call). Three calls per tick at 1× speed, regardless of how many fixes are visible. Falls back to the old clear+rebuild on render-key changes (filter, heatmap toggle, path toggle, region swap) or backward steps.
+- **"Top places" listed the same city repeatedly.** The 1 km bucketing in `StatsService.topPlaces` is finer than the system geocoder's locality resolution, so a single city like Bristol resolved to the same label across 5+ buckets. New `topPlacesProvider` over-fetches 30 buckets, geocodes them in parallel, then merges buckets sharing a label (sums counts, keeps the larger contributor's centroid as the pin location). Returns the top 10 deduped places. Buckets with no geocoder label are kept unmerged — coords don't look duplicated.
+
 ## [0.10.0+64] — 2026-04-28
 
 ### Added
