@@ -10,13 +10,10 @@ import '../models/emergency_contact.dart';
 import '../models/ping.dart';
 import '../providers/contacts_provider.dart';
 import '../providers/home_location_provider.dart';
-import '../providers/mbtiles_provider.dart';
 import '../providers/panic_provider.dart';
 import '../providers/pings_provider.dart';
-import '../services/mbtiles_service.dart';
 import '../services/panic/panic_service.dart';
 import '../widgets/help_button.dart';
-import '../widgets/trail_map.dart';
 import 'export_dialog.dart';
 
 /// The app's primary screen.
@@ -42,7 +39,6 @@ class HomeScreen extends ConsumerWidget {
     final healthy = ref.watch(heartbeatHealthyProvider);
     final count = ref.watch(pingCountProvider);
     final recent = ref.watch(recentPingsProvider);
-    final activeRegion = ref.watch(activeRegionProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -110,157 +106,84 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async => _refreshAll(ref),
-        // Whole screen is one scrolling ListView. Earlier the pinned
-        // top block (last-ping + panic + summary + export + map
-        // preview) plus the "Recent pings" header was taller than the
-        // viewport on smaller phones, leaving the Expanded
-        // recent-pings list with ~0 px of space — the user saw the
-        // header but no rows. Now everything scrolls together so the
-        // recent pings always render inline as you scroll down.
-        child: ListView.builder(
-          padding: const EdgeInsets.all(16),
-          physics: const AlwaysScrollableScrollPhysics(),
-          itemCount: _recentItemCount(recent),
-          itemBuilder: (context, index) {
-            return _buildHomeChild(
-              context: context,
-              ref: ref,
-              index: index,
-              last: last,
-              healthy: healthy,
-              count: count,
-              recent: recent,
-              activeRegion: activeRegion,
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  // Children before the inline recent-pings list. Keeping them as a
-  // typed list lets the itemBuilder switch between header chrome and
-  // ping tiles without nesting widgets that would each maintain their
-  // own scroll context.
-  static const int _headerChildCount = 11;
-
-  int _recentItemCount(AsyncValue<List<Ping>> recent) {
-    final pings = recent.valueOrNull ?? const <Ping>[];
-    final visible = pings.length > 100 ? 100 : pings.length;
-    // Header chrome + at-least-one row to render the empty / loading
-    // / error placeholder when the list itself is short.
-    final tail = visible == 0 ? 1 : visible;
-    return _headerChildCount + tail;
-  }
-
-  Widget _buildHomeChild({
-    required BuildContext context,
-    required WidgetRef ref,
-    required int index,
-    required AsyncValue<Ping?> last,
-    required AsyncValue<bool> healthy,
-    required AsyncValue<int> count,
-    required AsyncValue<List<Ping>> recent,
-    required AsyncValue<TilesRegion?> activeRegion,
-  }) {
-    switch (index) {
-      case 0:
-        return _LastPingCard(last: last, healthy: healthy);
-      case 1:
-        return const SizedBox(height: 12);
-      case 2:
-        return const _PanicButton();
-      case 3:
-        return const SizedBox(height: 12);
-      case 4:
-        return _SummaryCard(count: count);
-      case 5:
-        return const SizedBox(height: 12);
-      case 6:
-        return _ExportRow();
-      case 7:
-        return const SizedBox(height: 20);
-      case 8:
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        // Pinned top block + a self-contained scrolling Recent-pings
+        // list. The map preview was the bulk of the pinned height —
+        // dropped it from the home screen so the Expanded list has
+        // room to breathe. "Map" tile in the export/quick-actions row
+        // and the AppBar back-flow still take you to the full map
+        // screen in one tap.
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Trail',
-              style: Theme.of(context).textTheme.titleMedium,
+            _LastPingCard(last: last, healthy: healthy),
+            const SizedBox(height: 12),
+            const _PanicButton(),
+            const SizedBox(height: 12),
+            _SummaryCard(count: count),
+            const SizedBox(height: 12),
+            _ExportRow(),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Recent pings',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => context.push('/map'),
+                      icon: const Icon(Icons.map_outlined, size: 16),
+                      label: const Text('Map'),
+                    ),
+                    TextButton(
+                      onPressed: () => context.push('/history'),
+                      child: const Text('View all'),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            TextButton.icon(
-              onPressed: () => context.push('/map'),
-              icon: const Icon(Icons.open_in_full, size: 16),
-              label: const Text('Full map'),
+            const SizedBox(height: 8),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () async => _refreshAll(ref),
+                child: recent.when(
+                  data: (pings) {
+                    if (pings.isEmpty) {
+                      return ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          Padding(
+                            padding: EdgeInsets.all(24),
+                            child: Center(child: Text('No pings yet.')),
+                          ),
+                        ],
+                      );
+                    }
+                    final visible = pings.take(100).toList(growable: false);
+                    return ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: visible.length,
+                      itemBuilder: (_, i) => _PingTile(ping: visible[i]),
+                    );
+                  },
+                  loading: () => const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                  error: (e, st) => ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [_DbErrorCard(error: e, stack: st)],
+                  ),
+                ),
+              ),
             ),
           ],
-        );
-      case 9:
-        return Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: recent.when(
-            data: (pings) => TrailMap(
-              pings: pings,
-              activeRegion: activeRegion.valueOrNull,
-              height: 180,
-            ),
-            loading: () => const SizedBox(
-              height: 180,
-              child: Center(child: CircularProgressIndicator()),
-            ),
-            error: (_, __) => const SizedBox.shrink(),
-          ),
-        );
-      case 10:
-        return Padding(
-          padding: const EdgeInsets.only(top: 20, bottom: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Recent pings',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              TextButton(
-                onPressed: () => context.push('/history'),
-                child: const Text('View all'),
-              ),
-            ],
-          ),
-        );
-      default:
-        return _buildRecentChild(
-          context: context,
-          recentIndex: index - _headerChildCount,
-          recent: recent,
-        );
-    }
-  }
-
-  Widget _buildRecentChild({
-    required BuildContext context,
-    required int recentIndex,
-    required AsyncValue<List<Ping>> recent,
-  }) {
-    return recent.when(
-      data: (pings) {
-        if (pings.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: Text('No pings yet.')),
-          );
-        }
-        final visible = pings.take(100).toList(growable: false);
-        if (recentIndex >= visible.length) return const SizedBox.shrink();
-        return _PingTile(ping: visible[recentIndex]);
-      },
-      loading: () => const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(child: CircularProgressIndicator()),
+        ),
       ),
-      error: (e, st) => _DbErrorCard(error: e, stack: st),
     );
   }
 }

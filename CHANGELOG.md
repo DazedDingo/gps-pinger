@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.10.10+74] — 2026-05-01
+
+### Changed
+- **Recent pings is its own scrolling section again on the home screen.** Last build's "everything-scrolls-together" attempt fixed the visibility bug but lost the inner-scroll experience — you had to scroll the whole page to reach the end of the list. Now the home screen is back to a pinned top block (last-ping + panic + summary + export) with the recent-pings list in its own `Expanded` scroller below the section header. To make sure the inner list actually has visible space this time, dropped the mini map preview from the home screen — the Recent-pings header has a "Map" tile next to "View all" that takes you to the full map screen in one tap.
+
 ## [0.10.9+73] — 2026-05-01
 
 ### Fixed
