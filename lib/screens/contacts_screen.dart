@@ -6,6 +6,7 @@ import '../db/contact_dao.dart';
 import '../db/database.dart';
 import '../models/emergency_contact.dart';
 import '../providers/contacts_provider.dart';
+import '../widgets/help_button.dart';
 
 /// Emergency-contacts CRUD screen. Stored in the encrypted DB (not shared
 /// prefs) per PLAN.md "contacts data" rule — PII lives alongside the
@@ -21,7 +22,43 @@ class ContactsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final contacts = ref.watch(emergencyContactsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Emergency contacts')),
+      appBar: AppBar(
+        title: const Text('Emergency contacts'),
+        actions: const [
+          HelpButton(
+            screenTitle: 'Emergency contacts',
+            sections: [
+              HelpSection(
+                icon: Icons.phone,
+                title: 'What this list does',
+                body:
+                    'When the panic button fires, Trail composes an SMS '
+                    'with "PANIC at HH:MM — maps.google.com/?q=lat,lon" '
+                    'pre-addressed to every contact here. With Auto-send '
+                    'off (default) your SMS app opens — you tap Send. '
+                    'With it on, the SMS sends after a 5-second undo.',
+              ),
+              HelpSection(
+                icon: Icons.dialpad,
+                title: 'Phone format',
+                body:
+                    'Numbers are stored in E.164 — leading +, country '
+                    'code, digits, no spaces (e.g. +447700900123). '
+                    'The SMS intent will fail silently if the format is '
+                    'wrong, so double-check before relying on it.',
+              ),
+              HelpSection(
+                icon: Icons.shield_outlined,
+                title: 'Where they live',
+                body:
+                    'Stored in the encrypted SQLite database, not shared '
+                    'preferences. Names + numbers are protected by the '
+                    'same SQLCipher key as your ping history.',
+              ),
+            ],
+          ),
+        ],
+      ),
       body: contacts.when(
         data: (list) {
           if (list.isEmpty) {

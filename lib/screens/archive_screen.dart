@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../providers/pings_provider.dart';
 import '../services/archive/archive_service.dart';
+import '../widgets/help_button.dart';
 
 /// Archive flow — export-then-delete rows older than a user-picked
 /// cutoff.
@@ -150,6 +151,40 @@ class _ArchiveScreenState extends ConsumerState<ArchiveScreen> {
           onPressed: () =>
               context.canPop() ? context.pop() : context.go('/settings'),
         ),
+        actions: const [
+          HelpButton(
+            screenTitle: 'Archive',
+            sections: [
+              HelpSection(
+                icon: Icons.calendar_today,
+                title: 'Cutoff',
+                body:
+                    'Pick a date — every ping with a timestamp BEFORE '
+                    'that date will be exported and then deleted from '
+                    'the encrypted DB. Pings on or after the cutoff are '
+                    'untouched.',
+              ),
+              HelpSection(
+                icon: Icons.save_outlined,
+                title: 'Export-then-delete',
+                body:
+                    'The export file lands first; only after every '
+                    'requested format finishes writing are rows removed '
+                    'from the DB. If anything throws (disk full, share '
+                    'cancelled), nothing is deleted — the safe failure '
+                    'mode is "you keep all data".',
+              ),
+              HelpSection(
+                icon: Icons.warning_amber_outlined,
+                title: 'Permanent',
+                body:
+                    'Deleted rows aren\'t recoverable from the app. The '
+                    'GPX/CSV is your only copy — save it somewhere safe '
+                    'before confirming.',
+              ),
+            ],
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

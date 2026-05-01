@@ -4,6 +4,12 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.10.8+72] — 2026-05-01
+
+### Added
+- **Help button on every user-facing screen.** New `?` icon in each AppBar (home / history / map / regions / archive / diagnostics / home location / contacts / settings / stats) opens a "How to use" dialog with plain-English bullets explaining what every action and control does. Mirrors the help-button pattern in groceries-app + watchnext so the experience reads the same across apps.
+- **Recent pings on the home screen now scrolls 100 fixes** (was 20). The provider already loaded 200; only the visible cap moved.
+
 ## [0.10.7+71] — 2026-04-28
 
 ### Changed

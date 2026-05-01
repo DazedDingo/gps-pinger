@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'package:go_router/go_router.dart';
 
+import '../widgets/help_button.dart';
 import '../db/database.dart';
 import '../db/keystore_key.dart';
 import '../services/github_api.dart';
@@ -133,6 +134,75 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           // back landing on /settings instead of /map, etc.).
           onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
         ),
+        actions: const [
+          HelpButton(
+            screenTitle: 'Settings',
+            sections: [
+              HelpSection(
+                icon: Icons.schedule,
+                title: 'Scheduling: mode + cadence',
+                body:
+                    'Two paths drive the periodic ping. "Battery saver" '
+                    '(default) is WorkManager — system-friendly, may '
+                    'defer under heavy load. "Precise" is AlarmManager — '
+                    'fires on time even in Doze. Cadence picks how often: '
+                    '30 min / 1 h / 2 h / 4 h. Default 4 h.',
+              ),
+              HelpSection(
+                icon: Icons.directions_walk,
+                title: 'Motion-aware skipping',
+                body:
+                    'When on, the worker skips the GPS warm-up if the '
+                    'last two fixes are within 50 m AND the newest is '
+                    '< 2 h old. Logs a no_fix row instead — visible in '
+                    'history. Big battery saver on stationary days; '
+                    'fresh fix re-confirms after 2 h.',
+              ),
+              HelpSection(
+                icon: Icons.cloud_upload_outlined,
+                title: 'Cloud backup',
+                body:
+                    'Off by default — your encrypted DB is device-bound. '
+                    'Tap "Enable cloud backup" to set a passphrase: '
+                    'PBKDF2-HMAC-SHA256 (210 000 iters) derives the '
+                    'SQLCipher key from your phrase + a stored salt. '
+                    'Both files ride Android\'s Google Drive auto-backup, '
+                    'so a fresh install on a new phone can restore via '
+                    'phrase. Lose the phrase = lose the backup; there\'s '
+                    'no recovery path. The phrase never leaves the device.',
+              ),
+              HelpSection(
+                icon: Icons.warning_amber_outlined,
+                title: 'Auto-send panic SMS',
+                body:
+                    'Off by default. On = the SMS fires natively after a '
+                    '5-second undo grace period. Requires the SEND_SMS '
+                    'permission, which is asked when you flip the toggle. '
+                    'If the permission gets revoked later, Trail falls '
+                    'back to opening your SMS app like normal.',
+              ),
+              HelpSection(
+                icon: Icons.map_outlined,
+                title: 'Offline map regions',
+                body:
+                    'Trail is offline-only — no internet tile fallback. '
+                    'Install a region (.pmtiles) under Offline map → '
+                    'Regions, or build one on demand via the GitHub '
+                    'workflow if you have a Personal Access Token.',
+              ),
+              HelpSection(
+                icon: Icons.archive_outlined,
+                title: 'Archive older pings',
+                body:
+                    'Retention is "keep forever" — the archive flow is '
+                    'a manual export-then-delete for users who want to '
+                    'prune old data. Pings before the cutoff are written '
+                    'to GPX/CSV first, then removed; failure leaves them '
+                    'untouched.',
+              ),
+            ],
+          ),
+        ],
       ),
       body: ListView(
         children: [

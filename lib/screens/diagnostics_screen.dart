@@ -7,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../db/database.dart';
 import '../services/scheduler/worker_run_log.dart';
+import '../widgets/help_button.dart';
 
 /// Deep-diagnostics surface — not linked from the home screen, only
 /// reachable from Settings → Diagnostics. Surfaces the things a user
@@ -147,6 +148,47 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen>
               context.canPop() ? context.pop() : context.go('/settings'),
         ),
         actions: [
+          const HelpButton(
+            screenTitle: 'Diagnostics',
+            sections: [
+              HelpSection(
+                icon: Icons.security,
+                title: 'Permissions matrix',
+                body:
+                    'Live status of every permission Trail needs. '
+                    '"Battery optimisation" is the silent killer — if '
+                    'it\'s NOT whitelisted, Android will defer your '
+                    'background worker indefinitely. Tap to fix.',
+              ),
+              HelpSection(
+                icon: Icons.fact_check_outlined,
+                title: 'DB integrity check',
+                body:
+                    'Runs PRAGMA integrity_check against the encrypted '
+                    'SQLite. Takes a few seconds on a large trail. Used '
+                    'when you suspect corruption (e.g. after an OS-level '
+                    'storage error).',
+              ),
+              HelpSection(
+                icon: Icons.history,
+                title: 'Worker run log',
+                body:
+                    'Last 20 runs of the WorkManager dispatcher with the '
+                    'outcome (success / no-fix / skipped / threw). Cross-'
+                    'isolate SharedPreferences-backed; this is the only '
+                    'post-hoc evidence of what the background worker '
+                    'actually did.',
+              ),
+              HelpSection(
+                icon: Icons.copy_all_outlined,
+                title: 'Copy all',
+                body:
+                    'Bundles every signal into one blob for pasting into '
+                    'a bug report. Includes permission status, last 20 '
+                    'worker runs, and the integrity-check result.',
+              ),
+            ],
+          ),
           IconButton(
             tooltip: 'Copy all',
             icon: const Icon(Icons.copy_all_outlined),

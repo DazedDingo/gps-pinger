@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../models/ping.dart';
 import '../providers/pings_provider.dart';
+import '../widgets/help_button.dart';
 
 class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
@@ -12,7 +13,35 @@ class HistoryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final recent = ref.watch(recentPingsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('History')),
+      appBar: AppBar(
+        title: const Text('History'),
+        actions: const [
+          HelpButton(
+            screenTitle: 'History',
+            sections: [
+              HelpSection(
+                icon: Icons.list_alt,
+                title: 'Every ping, newest first',
+                body:
+                    'Up to 200 most-recent fixes from the encrypted DB. '
+                    'Older rows still live in the database — use the '
+                    'Archive flow in Settings to export-and-delete a '
+                    'cutoff window.',
+              ),
+              HelpSection(
+                icon: Icons.report_outlined,
+                title: 'Sources',
+                body:
+                    '"scheduled" rows are the periodic worker. "panic" '
+                    'are hold-to-panic fires. "boot" rows mark device '
+                    'reboots. "no_fix" rows mean the worker tried but '
+                    'GPS didn\'t respond in 2 minutes — the gap is still '
+                    'visible so silent failures can\'t hide.',
+              ),
+            ],
+          ),
+        ],
+      ),
       body: recent.when(
         data: (pings) {
           if (pings.isEmpty) {

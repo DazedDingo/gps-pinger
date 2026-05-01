@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../providers/home_location_provider.dart';
 import '../providers/pings_provider.dart';
 import '../services/home_location_service.dart';
+import '../widgets/help_button.dart';
 
 /// Home-location picker.
 ///
@@ -139,6 +140,44 @@ class _HomeLocationScreenState extends ConsumerState<HomeLocationScreen> {
           onPressed: () =>
               context.canPop() ? context.pop() : context.go('/settings'),
         ),
+        actions: const [
+          HelpButton(
+            screenTitle: 'Home location',
+            sections: [
+              HelpSection(
+                icon: Icons.home_outlined,
+                title: 'Why set home',
+                body:
+                    'Drives the "X km from home" line on the home screen '
+                    'last-fix card and the trip-detection feature on the '
+                    'Stats screen. Stored locally only — never synced.',
+              ),
+              HelpSection(
+                icon: Icons.gps_fixed,
+                title: 'Use last fix',
+                body:
+                    'Shortcut for "I\'m standing at home right now". '
+                    'Pulls coords from the most recent successful ping.',
+              ),
+              HelpSection(
+                icon: Icons.edit_location_outlined,
+                title: 'Type coords',
+                body:
+                    'For pinning a specific spot from an external source '
+                    '(Google Maps, OS grid). Decimal degrees; positive '
+                    'lat = north, positive lon = east.',
+              ),
+              HelpSection(
+                icon: Icons.delete_outline,
+                title: 'Clear',
+                body:
+                    'Removes the home location entirely. The home-distance '
+                    'line on the home screen disappears, and trip detection '
+                    'on Stats can\'t run without one.',
+              ),
+            ],
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

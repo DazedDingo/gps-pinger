@@ -7,6 +7,7 @@ import '../providers/home_location_provider.dart';
 import '../providers/pings_provider.dart';
 import '../providers/stats_provider.dart';
 import '../services/stats/stats_service.dart';
+import '../widgets/help_button.dart';
 import '../widgets/stats/calendar_heatmap.dart';
 import '../widgets/stats/clock_chart.dart';
 
@@ -39,6 +40,46 @@ class StatsScreen extends ConsumerWidget {
           onPressed: () =>
               context.canPop() ? context.pop() : context.go('/settings'),
         ),
+        actions: const [
+          HelpButton(
+            screenTitle: 'Stats',
+            sections: [
+              HelpSection(
+                icon: Icons.calendar_view_month,
+                title: 'Calendar heatmap',
+                body:
+                    'Last 12 weeks × 7 days; cell intensity scales to '
+                    'the busiest day in the window. Tap a day to open '
+                    'the map filtered to that date.',
+              ),
+              HelpSection(
+                icon: Icons.location_city,
+                title: 'Top places',
+                body:
+                    'Pings bucketed on a 1 km lat/lon grid, sorted by '
+                    'visit count. Buckets sharing a reverse-geocoded '
+                    'label are merged so a single city doesn\'t appear '
+                    'as five rows. Top 10.',
+              ),
+              HelpSection(
+                icon: Icons.access_time,
+                title: 'Time of day',
+                body:
+                    '24-hour radial chart of successful fixes by local '
+                    'hour. no_fix rows are excluded so motion-aware '
+                    'skips don\'t flatten the pattern.',
+              ),
+              HelpSection(
+                icon: Icons.flight_takeoff,
+                title: 'Trips',
+                body:
+                    'Auto-detected stretches > 10 km from home for '
+                    '≥ 6 h. Tap a card to open the map filtered to the '
+                    'trip\'s date range. Needs a home location set.',
+              ),
+            ],
+          ),
+        ],
       ),
       body: pingsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),

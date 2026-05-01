@@ -11,6 +11,7 @@ import '../providers/map_settings_provider.dart';
 import '../providers/mbtiles_provider.dart';
 import '../providers/pings_provider.dart';
 import '../providers/tile_server_provider.dart';
+import '../widgets/help_button.dart';
 import '../services/mbtiles_service.dart';
 import '../services/trail_style.dart';
 
@@ -163,6 +164,54 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               context.canPop() ? context.pop() : context.go('/home'),
         ),
         actions: [
+          const HelpButton(
+            screenTitle: 'Map',
+            sections: [
+              HelpSection(
+                icon: Icons.linear_scale,
+                title: 'Time slider + playback',
+                body:
+                    'Drag the slider to scrub through history; the trail '
+                    'redraws live. Play / Pause auto-advances at 1× → 16× '
+                    'speeds. The HUD top-left shows the current and '
+                    'previous fix timestamps with the gap between them.',
+              ),
+              HelpSection(
+                icon: Icons.location_on,
+                title: 'Pin colours',
+                body:
+                    'Red = current fix (slider tip). Amber = previous fix. '
+                    'Teal = earlier fixes. The blue dot is your live '
+                    'location from Android — toggle it via the my-location '
+                    'icon in the AppBar.',
+              ),
+              HelpSection(
+                icon: Icons.date_range,
+                title: 'Date filter',
+                body:
+                    'Calendar icon opens a date range picker. The slider, '
+                    'playback, and bbox-fit clamp to the filtered window. '
+                    'Tap a day on the Stats heatmap to jump here filtered '
+                    'to that day.',
+              ),
+              HelpSection(
+                icon: Icons.blur_on,
+                title: 'Heatmap',
+                body:
+                    'Swap the line + circles for a density-weighted '
+                    'heatmap layer. Useful for spotting hot spots over '
+                    'months of pings without thousands of dots.',
+              ),
+              HelpSection(
+                icon: Icons.layers_outlined,
+                title: 'Regions',
+                body:
+                    'Layers icon opens the Regions screen — install / '
+                    'switch the active offline tileset. Maps go blank if '
+                    'no region is active; Trail is offline-only.',
+              ),
+            ],
+          ),
           IconButton(
             tooltip: _dateFilter == null
                 ? 'Filter by date range'

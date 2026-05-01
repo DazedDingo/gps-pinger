@@ -9,6 +9,7 @@ import '../services/mbtiles_service.dart';
 import '../services/region_presets.dart';
 import '../services/tile_catalog.dart';
 import '../services/tile_downloader.dart';
+import '../widgets/help_button.dart';
 import 'bbox_picker_screen.dart';
 
 /// Offline-map region library.
@@ -33,6 +34,38 @@ class RegionsScreen extends ConsumerWidget {
               context.canPop() ? context.pop() : context.go('/settings'),
         ),
         actions: [
+          const HelpButton(
+            screenTitle: 'Offline map regions',
+            sections: [
+              HelpSection(
+                icon: Icons.cloud_download_outlined,
+                title: 'What\'s a region?',
+                body:
+                    'A `.pmtiles` file with vector map data for an area '
+                    '(e.g. UK, Lake District, Cairngorms). Trail is fully '
+                    'offline — without an active region, the maps go '
+                    'blank. Regions live under the app\'s documents '
+                    'folder so they survive uninstall-restore.',
+              ),
+              HelpSection(
+                icon: Icons.add_circle_outline,
+                title: 'Add a region',
+                body:
+                    'Tap "Add region" for four sources: pick a `.pmtiles` '
+                    'file from your device, paste a download URL, browse '
+                    'the curated catalog (built from raw.githubusercontent), '
+                    'or build one on demand from a bbox or national-park '
+                    'preset (needs a GitHub PAT for the workflow_dispatch).',
+              ),
+              HelpSection(
+                icon: Icons.check_circle_outline,
+                title: 'Set active',
+                body:
+                    'Only one region is active at a time — tap a row to '
+                    'set it. The map rebuilds on the next visit.',
+              ),
+            ],
+          ),
           // Diagnostic only — flips the active region to a synthetic
           // "remote demo" entry so the next map render uses the
           // Protomaps public PMTiles instead of the local file. Lets us

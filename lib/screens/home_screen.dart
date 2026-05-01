@@ -14,6 +14,7 @@ import '../providers/mbtiles_provider.dart';
 import '../providers/panic_provider.dart';
 import '../providers/pings_provider.dart';
 import '../services/panic/panic_service.dart';
+import '../widgets/help_button.dart';
 import '../widgets/trail_map.dart';
 import 'export_dialog.dart';
 
@@ -46,6 +47,56 @@ class HomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Trail'),
         actions: [
+          const HelpButton(
+            screenTitle: 'Home',
+            sections: [
+              HelpSection(
+                icon: Icons.access_time,
+                title: 'Last successful ping',
+                body:
+                    'Shows the timestamp, location, and "X km from home" of '
+                    'the most recent fix. The dot is green if Trail logged '
+                    'a row in the last 5 hours, red otherwise — that\'s the '
+                    'heartbeat. A red dot means the worker stopped firing.',
+              ),
+              HelpSection(
+                icon: Icons.touch_app_outlined,
+                title: 'Hold to panic',
+                body:
+                    'Press and hold the panic button for 600 ms to fire a '
+                    'panic ping. If you have emergency contacts and Auto-'
+                    'send SMS off (default), your SMS app opens pre-filled. '
+                    'With Auto-send on, the SMS fires after a 5-second undo.',
+              ),
+              HelpSection(
+                icon: Icons.format_list_numbered,
+                title: 'Recent pings',
+                body:
+                    'Last 100 fixes shown most-recent first. Each tile has '
+                    'the timestamp, source (scheduled / panic / boot), and '
+                    'a reverse-geocoded place name where available. Tap '
+                    '"View all" for the full paginated history.',
+              ),
+              HelpSection(
+                icon: Icons.map_outlined,
+                title: 'Map preview',
+                body:
+                    'Mini map below the export row shows recent fixes on '
+                    'your active offline region. "Full map" opens the '
+                    'playback / filter / heatmap screen. Install a region '
+                    'in Settings → Offline map → Regions if the map is '
+                    'empty.',
+              ),
+              HelpSection(
+                icon: Icons.refresh,
+                title: 'Refresh',
+                body:
+                    'Re-reads everything from the encrypted DB. Pull-to-'
+                    'refresh on the recent-pings list does the same. Use '
+                    'this if you just ran a manual ping or imported data.',
+              ),
+            ],
+          ),
           IconButton(
             tooltip: 'Refresh',
             onPressed: () => _refreshAll(ref),
@@ -134,7 +185,7 @@ class HomeScreen extends ConsumerWidget {
                         ],
                       );
                     }
-                    final visible = pings.take(20).toList(growable: false);
+                    final visible = pings.take(100).toList(growable: false);
                     return ListView.builder(
                       physics: const AlwaysScrollableScrollPhysics(),
                       itemCount: visible.length,
