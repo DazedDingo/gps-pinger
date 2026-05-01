@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../widgets/help_button.dart';
 import '../db/database.dart';
+import 'export_dialog.dart';
 import '../db/keystore_key.dart';
 import '../services/github_api.dart';
 import '../services/github_pat_service.dart';
@@ -328,6 +329,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           ),
           const Divider(),
           const _SectionHeader('History'),
+          ListTile(
+            leading: const Icon(Icons.ios_share),
+            title: const Text('Export…'),
+            subtitle: const Text(
+              'Pick a date range + format (GPX / CSV). Optional AES-256 '
+              'zip with passphrase. Doesn\'t modify the database.',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => showDialog<void>(
+              context: context,
+              builder: (_) => const ExportDialog(),
+            ),
+          ),
           ListTile(
             leading: const Icon(Icons.archive_outlined),
             title: const Text('Archive older pings'),

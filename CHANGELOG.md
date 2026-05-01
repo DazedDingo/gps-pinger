@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.10.12+76] — 2026-05-01
+
+### Changed
+- **Total-pings counter compacted to a header chip + Export moved to Settings.** The "Total pings logged" full-width card and the "Export…" button on the home screen used about 130 px of vertical space between them. Both moved out: the counter is now a small `pin_drop` icon + count (e.g. `📍 4123`) in the AppBar, tooltipped "Total pings logged"; Export is a tile in `Settings → History → Export…` that opens the same date-range / format / passphrase dialog. Net effect on the home screen: ~130 px of extra room for the inner Recent-pings scroller.
+
 ## [0.10.11+75] — 2026-05-01
 
 ### Changed

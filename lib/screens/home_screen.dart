@@ -16,7 +16,6 @@ import '../providers/pings_provider.dart';
 import '../services/panic/panic_service.dart';
 import '../widgets/help_button.dart';
 import '../widgets/trail_map.dart';
-import 'export_dialog.dart';
 
 /// The app's primary screen.
 ///
@@ -97,6 +96,11 @@ class HomeScreen extends ConsumerWidget {
               ),
             ],
           ),
+          // Compact total-pings indicator in the header — replaces
+          // the full-width "Total pings logged" card that used to sit
+          // in the pinned block. Tooltip keeps the original phrasing
+          // for accessibility.
+          _PingCountChip(count: count),
           IconButton(
             tooltip: 'Refresh',
             onPressed: () => _refreshAll(ref),
@@ -143,10 +147,6 @@ class HomeScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             const _PanicButton(),
-            const SizedBox(height: 12),
-            _SummaryCard(count: count),
-            const SizedBox(height: 12),
-            _ExportRow(),
             const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -679,35 +679,37 @@ class _PanicButtonState extends ConsumerState<_PanicButton>
   }
 }
 
-class _SummaryCard extends StatelessWidget {
+/// Compact "pin + count" chip for the AppBar. Shows the same value
+/// the `Total pings logged` card used to surface, in a fraction of
+/// the vertical space — frees up the home screen for the recent-
+/// pings scroller. Static; not tappable. Renders "…" while the
+/// count provider is still resolving.
+class _PingCountChip extends StatelessWidget {
   final AsyncValue<int> count;
-  const _SummaryCard({required this.count});
+  const _PingCountChip({required this.count});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: const Icon(Icons.pin_drop_outlined),
-        title: const Text('Total pings logged'),
-        trailing: Text(
-          count.asData?.value.toString() ?? '…',
-          style: Theme.of(context).textTheme.titleLarge,
+    final value = count.asData?.value;
+    final label = value == null ? '…' : value.toString();
+    return Tooltip(
+      message: 'Total pings logged',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.pin_drop_outlined, size: 18),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+            ),
+          ],
         ),
       ),
-    );
-  }
-}
-
-class _ExportRow extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return OutlinedButton.icon(
-      onPressed: () => showDialog<void>(
-        context: context,
-        builder: (_) => const ExportDialog(),
-      ),
-      icon: const Icon(Icons.ios_share),
-      label: const Text('Export…'),
     );
   }
 }
