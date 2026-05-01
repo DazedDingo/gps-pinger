@@ -10,6 +10,7 @@ import '../models/emergency_contact.dart';
 import '../models/ping.dart';
 import '../providers/contacts_provider.dart';
 import '../providers/home_location_provider.dart';
+import '../providers/home_map_height_provider.dart';
 import '../providers/panic_provider.dart';
 import '../providers/pings_provider.dart';
 import '../services/panic/panic_service.dart';
@@ -129,13 +130,14 @@ class HomeScreen extends ConsumerWidget {
             _LastPingCard(last: last, healthy: healthy),
             const SizedBox(height: 12),
             FullMapPanel(
-              // 800 px (~2.5× the previous 320). Dominates the home
-              // screen so the map is the primary surface; the recent-
-              // pings list compresses to the bottom band but still
-              // scrolls inside its Expanded. Use the expand icon in
-              // the control row to push the same panel to a real
-              // full-screen variant via /map.
-              height: 800,
+              // User-selectable preset (Settings → Map size on Home).
+              // 0.11.1 shipped 800 px hard-coded, which squeezed the
+              // recent-pings list to zero on most viewports — Standard
+              // (440 px) is the new default. Fall back to Standard on
+              // the very brief first-frame load so we never render at
+              // 0 height.
+              height: ref.watch(homeMapHeightProvider).asData?.value.pixels ??
+                  HomeMapHeight.standard.pixels,
               onExpand: () => context.push('/map'),
             ),
             const SizedBox(height: 16),

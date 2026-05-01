@@ -15,6 +15,7 @@ import '../services/github_pat_service.dart';
 import '../models/ping.dart';
 import '../providers/backup_provider.dart';
 import '../providers/home_location_provider.dart';
+import '../providers/home_map_height_provider.dart';
 import '../providers/map_settings_provider.dart';
 import '../providers/panic_provider.dart';
 import '../providers/pings_provider.dart';
@@ -302,6 +303,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           const Divider(),
           const _SectionHeader('Home'),
           const _HomeLocationTile(),
+          const _HomeMapHeightTile(),
           const Divider(),
           const _SectionHeader('Offline map'),
           ListTile(
@@ -1245,6 +1247,42 @@ class _MotionAwareTileState extends State<_MotionAwareTile> {
               setState(() => _enabled = v);
               await MotionAwareStore.set(v);
             },
+    );
+  }
+}
+
+/// Vertical-envelope picker for the inline `FullMapPanel` on the home
+/// screen. 0.11.1 hard-coded 800 px which dominated the home screen
+/// and left the recent-pings list with no room; this tile lets the
+/// user dial it down (Compact 280 px) or back up (Large 640 px), with
+/// Standard 440 px as the new default.
+class _HomeMapHeightTile extends ConsumerWidget {
+  const _HomeMapHeightTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(homeMapHeightProvider);
+    final current = state.asData?.value;
+    return ListTile(
+      leading: const Icon(Icons.aspect_ratio_outlined),
+      title: const Text('Map size on Home'),
+      subtitle: Text(
+        'How tall the inline map is on the home screen. Currently: '
+        '${current?.label ?? "…"} (${current?.pixels.round() ?? "—"} px).',
+      ),
+      trailing: DropdownButton<HomeMapHeight>(
+        value: current,
+        onChanged: state.isLoading
+            ? null
+            : (v) {
+                if (v == null) return;
+                ref.read(homeMapHeightProvider.notifier).set(v);
+              },
+        items: [
+          for (final h in HomeMapHeight.values)
+            DropdownMenuItem(value: h, child: Text(h.label)),
+        ],
+      ),
     );
   }
 }

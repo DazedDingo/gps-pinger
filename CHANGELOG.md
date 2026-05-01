@@ -4,6 +4,11 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.11.2+80] — 2026-05-01
+
+### Added
+- **Settings → Map size on Home.** Pick how much vertical space the inline map gets on Home: Compact (280 px), Standard (440 px, default) or Large (640 px). 0.11.1's 800 px squeezed the recent-pings list to zero on most viewports — Standard is the new default and the picker lets you go bigger or smaller per device.
+
 ## [0.11.1+79] — 2026-05-01
 
 ### Changed
