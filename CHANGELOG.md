@@ -4,6 +4,19 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.11.1+79] — 2026-05-01
+
+### Changed
+- **Home-screen map is much taller now (~2.5× the previous size).** The map is the primary surface on Home rather than a small preview. Recent pings still live below it in their own scrolling band; the expand icon in the map's control row jumps you to a true full-screen view when you want to focus on playback or filtering.
+
+## [0.11.0+78] — 2026-05-01
+
+### Changed
+- **Heartbeat card on Home is way more compact.** The "last ping" card was using ~150 px on every render — heart icon + title row, big timestamp, coords, place name, and home-distance each on their own line. It's now two lines: status + time on one, coords + place + distance-from-home on the other. Same information, a fraction of the height.
+- **Full map functionality is on the Home screen.** Until this release the home screen showed a 140 px preview that you could only pan/zoom — playback, heatmap, path-line, date-range filter, regions, and live-location dot all required a trip to the dedicated `/map` screen. Those controls now sit inline on Home directly above the playback time-slider, so you can scrub through history, toggle heatmap, change date range, etc. without leaving Home.
+- **"Open full screen" button added to the inline map.** A small expand icon in the control row pushes the same panel to a true full-screen variant (the `/map` route) when you want maximum viewport — useful for scrubbing long playback sessions or comparing fixes spread across a wide region.
+- **Recent-ping rows compacted to a single line each.** ~36 px per row now (icon · time · coords · place · source) instead of the old two-line `ListTile` shape, so more of your history fits in view at once. No-fix entries surface their note inline with an error-coloured icon.
+
 ## [0.10.13+77] — 2026-05-01
 
 ### Changed

@@ -129,7 +129,13 @@ class HomeScreen extends ConsumerWidget {
             _LastPingCard(last: last, healthy: healthy),
             const SizedBox(height: 12),
             FullMapPanel(
-              height: 320,
+              // 800 px (~2.5× the previous 320). Dominates the home
+              // screen so the map is the primary surface; the recent-
+              // pings list compresses to the bottom band but still
+              // scrolls inside its Expanded. Use the expand icon in
+              // the control row to push the same panel to a real
+              // full-screen variant via /map.
+              height: 800,
               onExpand: () => context.push('/map'),
             ),
             const SizedBox(height: 16),
