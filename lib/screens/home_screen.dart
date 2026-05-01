@@ -101,6 +101,10 @@ class HomeScreen extends ConsumerWidget {
           // in the pinned block. Tooltip keeps the original phrasing
           // for accessibility.
           _PingCountChip(count: count),
+          // Hold-to-panic icon in the header. Same 600 ms hold + auto-
+          // send-grace flow as the old card, just compact. Icon stays
+          // red regardless of theme so it reads as urgent.
+          const _PanicHeaderAction(),
           IconButton(
             tooltip: 'Refresh',
             onPressed: () => _refreshAll(ref),
@@ -145,8 +149,6 @@ class HomeScreen extends ConsumerWidget {
               ),
               error: (_, __) => const SizedBox.shrink(),
             ),
-            const SizedBox(height: 12),
-            const _PanicButton(),
             const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -354,23 +356,23 @@ class _HomeDistanceLine extends ConsumerWidget {
   }
 }
 
-/// Panic card on the home screen.
+/// Panic action in the AppBar.
 ///
-/// De-emphasised by design (0.6.1+16): a single outlined hold-to-trigger
-/// button + a smaller continuous-mode action. The "big red button" of
-/// pre-0.6.1 fired on a single tap and was racking up accidental panics
-/// from pocket taps and UI mis-touches. Now the user must hold for
-/// [_holdDuration]; the progress ring fills during the hold so they can
-/// see it's armed. After fire, if `panicAutoSendProvider` is on, the SMS
-/// goes out *after* an additional 5-second on-screen undo grace.
-class _PanicButton extends ConsumerStatefulWidget {
-  const _PanicButton();
+/// Pre-0.10.13 this was a full-width card in the home body. The user
+/// asked to demote it to a header icon for a less obtrusive home
+/// screen. Same hold-to-trigger UX (600 ms) and same auto-send-grace
+/// flow — only the chrome is different. The icon's background fills
+/// red as you hold so the arming is still visually obvious. The
+/// "Start continuous panic" affordance moved to Settings → Panic.
+class _PanicHeaderAction extends ConsumerStatefulWidget {
+  const _PanicHeaderAction();
 
   @override
-  ConsumerState<_PanicButton> createState() => _PanicButtonState();
+  ConsumerState<_PanicHeaderAction> createState() =>
+      _PanicHeaderActionState();
 }
 
-class _PanicButtonState extends ConsumerState<_PanicButton>
+class _PanicHeaderActionState extends ConsumerState<_PanicHeaderAction>
     with SingleTickerProviderStateMixin {
   /// How long the user must hold before panic fires. 600 ms is the
   /// sweet spot — long enough that a stray pocket-tap won't cross it,
@@ -548,131 +550,62 @@ class _PanicButtonState extends ConsumerState<_PanicButton>
     }
   }
 
-  Future<void> _startContinuous() async {
-    final duration = await ref.read(panicDurationProvider.future);
-    final ok = await PanicService.startContinuous(duration);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          ok
-              ? 'Continuous panic started (${duration.label}). Tap Stop '
-                  'in the notification to end early.'
-              : 'Continuous-mode service unavailable — logging a single '
-                  'panic ping instead.',
-        ),
-      ),
-    );
-    if (!ok) {
-      await _panicNow();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
-      // Lighter tint than pre-0.6.1 so the card no longer dominates the
-      // screen. Red border still marks its intent.
-      color: scheme.errorContainer.withValues(alpha: 0.15),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: scheme.error.withValues(alpha: 0.45)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            GestureDetector(
-              onLongPressStart: (_) => _startHold(),
-              onLongPressEnd: (_) => _cancelHold(),
-              onLongPressCancel: _cancelHold,
-              // Fixed height + explicit full-width makes the Stack and the
-              // button share identical bounds — previously the OutlinedButton
-              // was intrinsic-width while the Positioned.fill overlay
-              // stretched to the Stack's (Column.stretch) full width, so the
-              // red fill visibly spilled past the button's sides on release.
-              child: SizedBox(
-                height: 52,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    OutlinedButton(
-                      // Tap does nothing — the long-press gesture above is
-                      // the only arming path. Button exists for visual
-                      // affordance + to provide the disabled/working state.
-                      onPressed: _working ? null : () {},
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: scheme.error,
-                        side: BorderSide(color: scheme.error, width: 1.5),
-                        // Border radius must match the fill overlay below
-                        // so the animated fill clips cleanly against the
-                        // button's corners.
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(8)),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        textStyle: Theme.of(context)
-                            .textTheme
-                            .labelLarge
-                            ?.copyWith(letterSpacing: 1.4),
-                      ),
-                      child: _working
-                          ? const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2),
-                                ),
-                                SizedBox(width: 8),
-                                Text('LOGGING…'),
-                              ],
-                            )
-                          : const FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text('HOLD TO PANIC'),
-                            ),
-                    ),
-                    // Fill-progress overlay during hold. Wrapped in a
-                    // ClipRRect matching the button's shape so the fill
-                    // can't escape the rounded corners.
-                    IgnorePointer(
-                      child: ClipRRect(
-                        borderRadius:
-                            const BorderRadius.all(Radius.circular(8)),
-                        child: AnimatedBuilder(
-                          animation: _hold,
-                          builder: (_, __) {
-                            if (_hold.value == 0) {
-                              return const SizedBox.shrink();
-                            }
-                            return FractionallySizedBox(
-                              alignment: Alignment.centerLeft,
-                              widthFactor: _hold.value,
-                              child: Container(
-                                color:
-                                    scheme.error.withValues(alpha: 0.18),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
+    return Tooltip(
+      message: _working ? 'Logging panic…' : 'Hold to panic (600 ms)',
+      child: GestureDetector(
+        onLongPressStart: (_) => _startHold(),
+        onLongPressEnd: (_) => _cancelHold(),
+        onLongPressCancel: _cancelHold,
+        child: AnimatedBuilder(
+          animation: _hold,
+          builder: (context, _) {
+            // Background fills red as the user holds. At 0% it's a
+            // soft tint; at 100% (just before fire) it's the full
+            // error tone. After fire, the indicator goes back to 0
+            // automatically because we reset the controller.
+            final fill = _hold.value;
+            final bg = Color.lerp(
+              Colors.transparent,
+              scheme.error.withValues(alpha: 0.7),
+              fill,
+            )!;
+            return Container(
+              width: 40,
+              height: 40,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: bg,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: scheme.error.withValues(alpha: 0.6),
+                  width: 1.5,
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            TextButton.icon(
-              onPressed: _working ? null : _startContinuous,
-              icon: const Icon(Icons.timer_outlined, size: 18),
-              label: const Text('Start continuous panic'),
-            ),
-          ],
+              child: _working
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor:
+                            AlwaysStoppedAnimation(scheme.error),
+                      ),
+                    )
+                  : Icon(
+                      Icons.warning_rounded,
+                      // Switch to the high-contrast colour once the
+                      // fill is dark enough to obscure the red icon.
+                      color: fill > 0.5
+                          ? scheme.onError
+                          : scheme.error,
+                      size: 20,
+                    ),
+            );
+          },
         ),
       ),
     );

@@ -297,6 +297,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             onTap: () => context.push('/contacts'),
           ),
           const _ContinuousDurationTile(),
+          const _StartContinuousTile(),
           const _AutoSendToggleTile(),
           const Divider(),
           const _SectionHeader('Home'),
@@ -787,6 +788,48 @@ class _ContinuousDurationTile extends ConsumerWidget {
           for (final d in PanicDuration.values)
             DropdownMenuItem(value: d, child: Text(d.label)),
         ],
+      ),
+    );
+  }
+}
+
+/// Launcher for continuous-panic mode. Pre-0.10.13 this lived inside
+/// the panic card on the home screen; that card is gone now (panic
+/// is a header icon), so the start affordance moved here next to its
+/// duration setting.
+class _StartContinuousTile extends ConsumerWidget {
+  const _StartContinuousTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final durationState = ref.watch(panicDurationProvider);
+    final loading = durationState.isLoading;
+    return ListTile(
+      leading: const Icon(Icons.play_circle_outline),
+      title: const Text('Start continuous panic now'),
+      subtitle: const Text(
+        'Begin the duration above. Tap "Stop" in the persistent '
+        'notification to end early.',
+      ),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: loading ? null : () => _start(context, ref),
+    );
+  }
+
+  Future<void> _start(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final duration = await ref.read(panicDurationProvider.future);
+    final ok = await PanicService.startContinuous(duration);
+    if (!context.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? 'Continuous panic started (${duration.label}). Tap Stop '
+                  'in the notification to end early.'
+              : 'Continuous-mode service unavailable — try again, or '
+                  'fire a single panic from the header.',
+        ),
       ),
     );
   }

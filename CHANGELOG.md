@@ -4,6 +4,12 @@ All notable changes to **Trail** are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/) with the Android `versionCode+build` suffix.
 
+## [0.10.13+77] — 2026-05-01
+
+### Changed
+- **Panic moved to a header icon.** The full-width panic card is gone from the home body; in its place is a red `warning` icon in the AppBar with the same hold-to-trigger behaviour (600 ms, fill animates as you hold, releasing before 100 % cancels). The auto-send 5-second undo grace and contact-fan-out flow are unchanged. Frees ~70 px on the home screen for the inner Recent-pings scroller.
+- **"Start continuous panic" lives in Settings now.** Moved out of the home panic card (which no longer exists) and into Settings → Panic, sitting next to the existing "Continuous-panic duration" tile. Same foreground-service start, same persistent-notification stop affordance.
+
 ## [0.10.12+76] — 2026-05-01
 
 ### Changed
